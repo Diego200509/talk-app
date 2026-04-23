@@ -15,11 +15,27 @@ export function RequireAuth({ children }: Props) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setReady(true);
-      return;
+    const persistApi = (useAuthStore as typeof useAuthStore & {
+      persist?: {
+        hasHydrated?: () => boolean;
+        onFinishHydration?: (callback: () => void) => () => void;
+      };
+    }).persist;
+
+    if (!persistApi) {
+      const task = setTimeout(() => setReady(true), 0);
+      return () => clearTimeout(task);
     }
-    return useAuthStore.persist.onFinishHydration(() => setReady(true));
+
+    if (persistApi.hasHydrated?.()) {
+      const task = setTimeout(() => setReady(true), 0);
+      return () => clearTimeout(task);
+    }
+
+    const unsubscribe = persistApi.onFinishHydration?.(() => setReady(true));
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   useLayoutEffect(() => {

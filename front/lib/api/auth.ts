@@ -1,6 +1,13 @@
 import { apiClient } from "@/lib/api/client";
 
-export type AuthUser = { id: string; email: string; name: string };
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  nickname: string;
+  status: string;
+  avatarUrl: string;
+};
 
 export type AuthSession = { token: string; user: AuthUser };
 

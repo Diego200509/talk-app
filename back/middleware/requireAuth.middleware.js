@@ -26,6 +26,9 @@ async function requireAuth(req, res, next) {
       id: user._id.toString(),
       email: user.email,
       name: user.name || "",
+      nickname: user.nickname || "",
+      status: user.status || "Disponible",
+      avatarUrl: user.avatarUrl || "",
     };
     next();
   } catch (e) {

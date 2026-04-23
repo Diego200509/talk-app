@@ -12,6 +12,21 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     passwordHistory: { type: [String], default: [] },
     name: { type: String, required: true, trim: true, minlength: 2, maxlength: 80 },
+    nickname: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 2,
+      maxlength: 30,
+    },
+    nicknameKey: { type: String, required: true, unique: true, index: true },
+    status: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: "Disponible",
+    },
+    avatarUrl: { type: String, default: "" },
   },
   { timestamps: true }
 );

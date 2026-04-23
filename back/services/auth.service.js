@@ -5,6 +5,7 @@ const PasswordResetToken = require("../models/PasswordResetToken.model");
 const { signAccessToken } = require("../utils/jwt.util");
 const { hashResetToken, generateRawResetToken } = require("../utils/token-hash.util");
 const { sendPasswordResetEmail } = require("./mail.service");
+const { normalizeNickname } = require("./user.service");
 
 const BCRYPT_ROUNDS = 12;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -34,7 +35,15 @@ async function register({ email, password, name }) {
     throw err;
   }
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  const user = await User.create({ email, passwordHash, name: trimmedName });
+  const nickname = await generateUniqueNickname(trimmedName);
+  const user = await User.create({
+    email,
+    passwordHash,
+    name: trimmedName,
+    nickname,
+    nicknameKey: normalizeNickname(nickname),
+    status: "Disponible",
+  });
   const { token } = signAccessToken({ sub: user._id.toString(), email: user.email });
   return { token, user: toPublicUser(user) };
 }
@@ -134,7 +143,24 @@ function toPublicUser(userDoc) {
     id: userDoc._id.toString(),
     email: userDoc.email,
     name: userDoc.name || "",
+    nickname: userDoc.nickname || "",
+    status: userDoc.status || "Disponible",
+    avatarUrl: userDoc.avatarUrl || "",
   };
+}
+
+async function generateUniqueNickname(source) {
+  const baseRaw = String(source || "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .slice(0, 24) || "Usuario";
+  let candidate = baseRaw;
+  let counter = 1;
+  while (await User.exists({ nicknameKey: normalizeNickname(candidate) })) {
+    counter += 1;
+    candidate = `${baseRaw}_${counter}`.slice(0, 30);
+  }
+  return candidate;
 }
 
 module.exports = {
