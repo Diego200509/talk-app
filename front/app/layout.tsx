@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { TALKAPP_LOGO_PATH } from "@/lib/brand";
 import "./globals.css";
 
 const fontSans = Plus_Jakarta_Sans({
@@ -19,6 +20,11 @@ const fontMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "TalkApp",
   description: "Conecta. Habla. Colabora.",
+  icons: {
+    icon: [{ url: TALKAPP_LOGO_PATH, type: "image/png" }],
+    apple: [{ url: TALKAPP_LOGO_PATH, type: "image/png" }],
+    shortcut: TALKAPP_LOGO_PATH,
+  },
 };
 
 export default function RootLayout({

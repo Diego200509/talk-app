@@ -17,6 +17,7 @@ export type ChatMessage = {
   deletedAt?: string | null;
   deliveredBy?: string[];
   readBy?: string[];
+  blockedFor?: string[];
 };
 
 export type ContactItem = {
@@ -26,7 +27,6 @@ export type ContactItem = {
   unreadCount?: number;
   muted?: boolean;
   blockedByMe?: boolean;
-  blockedMe?: boolean;
   blocked?: boolean;
 };
 
@@ -38,6 +38,5 @@ export type Conversation = {
   muted?: boolean;
   unreadCount?: number;
   blockedByMe?: boolean;
-  blockedMe?: boolean;
   blocked?: boolean;
 };

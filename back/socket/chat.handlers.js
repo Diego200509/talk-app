@@ -72,10 +72,24 @@ function registerChatHandlers(io) {
       });
     }
 
+    socket.on(SOCKET_EVENTS.CONVERSATION_LEAVE, ({ conversationId }) => {
+      if (!conversationId) return;
+      socket.leave(`conversation:${conversationId}`);
+      if (socket.data.activeConversationId === conversationId) {
+        socket.data.activeConversationId = null;
+      }
+    });
+
     socket.on(SOCKET_EVENTS.CONVERSATION_JOIN, async ({ conversationId }) => {
       try {
         if (!conversationId) return;
         await assertConversationAccess(conversationId, userId);
+
+        const previousId = socket.data.activeConversationId;
+        if (previousId && previousId !== conversationId) {
+          socket.leave(`conversation:${previousId}`);
+        }
+
         socket.data.activeConversationId = conversationId;
         socket.join(`conversation:${conversationId}`);
 
@@ -132,11 +146,23 @@ function registerChatHandlers(io) {
 
     socket.on(SOCKET_EVENTS.MESSAGE_SEND, async ({ conversationId, content }) => {
       try {
-        const { message, participantIds, otherParticipantId } = await createMessage({
-          conversationId,
-          senderId: userId,
-          content,
-        });
+        const { message, participantIds, otherParticipantId, hiddenFromReceiver } =
+          await createMessage({
+            conversationId,
+            senderId: userId,
+            content,
+          });
+
+        if (hiddenFromReceiver) {
+          io.to(`user:${userId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, message);
+          await emitConversationUpdated(io, {
+            conversationId,
+            message,
+            participantIds: [userId],
+            fromUserId: userId,
+          });
+          return;
+        }
 
         let statusMessage = message;
         const recipientViewing = await isUserViewingConversation(
@@ -186,7 +212,7 @@ function registerChatHandlers(io) {
           });
         }
       } catch (error) {
-        if (error.code === "USER_BLOCKED") {
+        if (error.code === "USER_BLOCKED_SENDER" || error.code === "USER_BLOCKED") {
           socket.emit(SOCKET_EVENTS.CHAT_ERROR, {
             message: error.message || "No puedes enviar mensajes",
           });

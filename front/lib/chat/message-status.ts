@@ -6,7 +6,6 @@ function normIds(arr?: string[]) {
   return (arr || []).map((id) => String(id));
 }
 
-/** Estado visual para mensajes propios respecto al otro participante (chat 1:1). */
 export function getMessageStatus(
   message: ChatMessage,
   currentUserId: string | undefined,
@@ -18,6 +17,11 @@ export function getMessageStatus(
   const readBy = normIds(message.readBy);
   const deliveredBy = normIds(message.deliveredBy);
   const peerId = otherUserId ? String(otherUserId) : null;
+
+  const blockedFor = normIds(message.blockedFor);
+  if (peerId && blockedFor.includes(peerId)) {
+    return "sent";
+  }
 
   if (peerId) {
     if (readBy.includes(peerId)) return "read";

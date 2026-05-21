@@ -3,11 +3,25 @@ const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
 const User = require("../models/User.model");
 const { toPublicUser } = require("../utils/user.util");
-const { isUserBlocked, isBlockedEitherWay } = require("./block.service");
+const { isUserBlocked } = require("./block.service");
 const { isUserOnline } = require("./presence.service");
 
 function idsToStrings(arr) {
   return (arr || []).map((id) => id.toString());
+}
+
+function viewerObjectId(userId) {
+  return new mongoose.Types.ObjectId(userId);
+}
+
+/** Mensajes visibles para quien consulta (excluye los ocultos por bloqueo). */
+function visibleMessagesQuery(conversationId, viewerId) {
+  const oid = viewerObjectId(viewerId);
+  return {
+    conversationId,
+    deletedForEveryone: { $ne: true },
+    blockedFor: { $ne: oid },
+  };
 }
 
 function normalizeMessage(message) {
@@ -22,17 +36,29 @@ function normalizeMessage(message) {
     deletedAt: message.deletedAt || null,
     deliveredBy: idsToStrings(message.deliveredBy),
     readBy: idsToStrings(message.readBy),
+    blockedFor: idsToStrings(message.blockedFor),
   };
 }
 
+function isHiddenForUser(message, userId) {
+  return (message.blockedFor || []).some((id) => id.toString() === userId.toString());
+}
+
 async function getUnreadCount(conversationId, userId) {
-  const uid = new mongoose.Types.ObjectId(userId);
+  const uid = viewerObjectId(userId);
   return Message.countDocuments({
     conversationId,
     sender: { $ne: userId },
     readBy: { $ne: uid },
     deletedForEveryone: { $ne: true },
+    blockedFor: { $ne: uid },
   });
+}
+
+async function getLastVisibleMessage(conversationId, viewerId) {
+  return Message.findOne(visibleMessagesQuery(conversationId, viewerId))
+    .sort({ createdAt: -1 })
+    .lean();
 }
 
 async function getOrCreateDirectConversation(currentUserId, targetUserId) {
@@ -60,9 +86,9 @@ async function getOrCreateDirectConversation(currentUserId, targetUserId) {
   });
 
   if (!conversation) {
-    if (await isBlockedEitherWay(currentUserId, targetUserId)) {
-      const err = new Error("No puedes iniciar conversación con este usuario");
-      err.code = "USER_BLOCKED";
+    if (await isUserBlocked(currentUserId, targetUserId)) {
+      const err = new Error("Desbloquea a este usuario para iniciar la conversación");
+      err.code = "USER_BLOCKED_SENDER";
       throw err;
     }
     conversation = await Conversation.create({
@@ -73,14 +99,8 @@ async function getOrCreateDirectConversation(currentUserId, targetUserId) {
   }
 
   const blockedByMe = await isUserBlocked(currentUserId, targetUserId);
-  const blockedMe = await isUserBlocked(targetUserId, currentUserId);
 
-  const lastMessage = await Message.findOne({
-    conversationId: conversation._id,
-    deletedForEveryone: { $ne: true },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  const lastMessage = await getLastVisibleMessage(conversation._id, currentUserId);
 
   const mutedBy = idsToStrings(conversation.mutedBy);
   const unreadCount = await getUnreadCount(conversation._id, currentUserId);
@@ -94,14 +114,13 @@ async function getOrCreateDirectConversation(currentUserId, targetUserId) {
     muted: mutedBy.includes(currentUserId.toString()),
     unreadCount,
     blockedByMe,
-    blockedMe,
-    blocked: blockedByMe || blockedMe,
+    blocked: blockedByMe,
   };
 }
 
 async function getMessageHistory(conversationId, currentUserId) {
   const conversation = await assertConversationAccess(conversationId, currentUserId);
-  const messages = await Message.find({ conversationId })
+  const messages = await Message.find(visibleMessagesQuery(conversationId, currentUserId))
     .sort({ createdAt: 1 })
     .limit(500)
     .lean();
@@ -142,12 +161,17 @@ async function assertMessagingAllowed(senderId, conversationId) {
     err.code = "INVALID_CONVERSATION";
     throw err;
   }
-  if (await isBlockedEitherWay(senderId, otherId)) {
-    const err = new Error("No puedes enviar mensajes en esta conversación");
-    err.code = "USER_BLOCKED";
+  if (await isUserBlocked(senderId, otherId)) {
+    const err = new Error("Desbloquea a este usuario para enviarle mensajes.");
+    err.code = "USER_BLOCKED_SENDER";
     throw err;
   }
-  return { conversation, otherParticipantId: otherId.toString() };
+  const receiverBlockedSender = await isUserBlocked(otherId, senderId);
+  return {
+    conversation,
+    otherParticipantId: otherId.toString(),
+    receiverBlockedSender,
+  };
 }
 
 async function deleteMessageForEveryone(messageId, userId) {
@@ -171,16 +195,22 @@ async function deleteMessageForEveryone(messageId, userId) {
 
   await assertConversationAccess(message.conversationId, userId);
 
-  message.deletedForEveryone = true;
-  message.deletedAt = new Date();
-  message.content = "";
-  await message.save();
+  const updated = await Message.findByIdAndUpdate(
+    messageId,
+    {
+      $set: {
+        deletedForEveryone: true,
+        deletedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" }
+  );
 
   const conversation = await Conversation.findById(message.conversationId).lean();
   const participantIds = conversation.participants.map((id) => id.toString());
 
   return {
-    message: normalizeMessage(message),
+    message: normalizeMessage(updated || message),
     participantIds,
   };
 }
@@ -191,15 +221,17 @@ async function markMessageDelivered(messageId, userId) {
     _id: messageId,
     sender: { $ne: userId },
     deletedForEveryone: { $ne: true },
+    blockedFor: { $ne: uid },
   });
   if (!message) return null;
+  if (isHiddenForUser(message, userId)) return null;
 
   await assertConversationAccess(message.conversationId, userId);
 
   const updated = await Message.findOneAndUpdate(
     { _id: messageId, deliveredBy: { $ne: uid } },
     { $addToSet: { deliveredBy: uid } },
-    { new: true }
+    { returnDocument: "after" }
   );
   return normalizeMessage(updated || message);
 }
@@ -210,15 +242,17 @@ async function markMessageAsRead(messageId, userId) {
     _id: messageId,
     sender: { $ne: userId },
     deletedForEveryone: { $ne: true },
+    blockedFor: { $ne: uid },
   });
   if (!message) return null;
+  if (isHiddenForUser(message, userId)) return null;
 
   await assertConversationAccess(message.conversationId, userId);
 
   const updated = await Message.findOneAndUpdate(
     { _id: messageId },
     { $addToSet: { readBy: uid, deliveredBy: uid } },
-    { new: true }
+    { returnDocument: "after" }
   );
   return normalizeMessage(updated || message);
 }
@@ -233,6 +267,7 @@ async function markConversationAsRead(conversationId, userId) {
       sender: { $ne: userId },
       deletedForEveryone: { $ne: true },
       readBy: { $ne: uid },
+      blockedFor: { $ne: uid },
     },
     { $addToSet: { readBy: uid, deliveredBy: uid } }
   );
@@ -242,6 +277,7 @@ async function markConversationAsRead(conversationId, userId) {
     sender: { $ne: userId },
     deletedForEveryone: { $ne: true },
     readBy: uid,
+    blockedFor: { $ne: uid },
   }).lean();
 
   const messages = updatedDocs.map(normalizeMessage);
@@ -264,6 +300,7 @@ async function markAllConversationsDeliveredForUser(userId) {
     sender: { $ne: userId },
     deletedForEveryone: { $ne: true },
     deliveredBy: { $ne: uid },
+    blockedFor: { $ne: uid },
   }).lean();
 
   const updated = [];
@@ -279,7 +316,7 @@ async function markAllConversationsDeliveredForUser(userId) {
     const doc = await Message.findOneAndUpdate(
       { _id: msg._id, deliveredBy: { $ne: uid } },
       { $addToSet: { deliveredBy: uid } },
-      { new: true }
+      { returnDocument: "after" }
     );
     if (doc) updated.push(normalizeMessage(doc));
   }
@@ -345,4 +382,7 @@ module.exports = {
   unmuteConversation,
   isConversationMutedForUser,
   isUserOnline,
+  isHiddenForUser,
+  getLastVisibleMessage,
+  visibleMessagesQuery,
 };

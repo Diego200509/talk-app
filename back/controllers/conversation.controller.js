@@ -24,7 +24,7 @@ async function getOrCreateDirect(req, res) {
     if (error.code === "TARGET_NOT_FOUND") {
       return res.status(404).json({ message: error.message });
     }
-    if (error.code === "USER_BLOCKED") {
+    if (error.code === "USER_BLOCKED" || error.code === "USER_BLOCKED_SENDER") {
       return res.status(403).json({ message: error.message });
     }
     return res.status(500).json({ message: "No se pudo crear/obtener la conversación" });

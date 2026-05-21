@@ -10,7 +10,10 @@ async function createMessage({ conversationId, senderId, content }) {
     throw err;
   }
 
-  const { conversation, otherParticipantId } = await assertMessagingAllowed(senderId, conversationId);
+  const { conversation, otherParticipantId, receiverBlockedSender } =
+    await assertMessagingAllowed(senderId, conversationId);
+
+  const blockedFor = receiverBlockedSender ? [otherParticipantId] : [];
 
   const message = await Message.create({
     conversationId,
@@ -18,6 +21,7 @@ async function createMessage({ conversationId, senderId, content }) {
     content: cleanContent,
     deliveredBy: [],
     readBy: [],
+    blockedFor,
   });
 
   await Conversation.updateOne(
@@ -29,6 +33,7 @@ async function createMessage({ conversationId, senderId, content }) {
     message: normalizeMessage(message),
     participantIds: conversation.participants.map((id) => id.toString()),
     otherParticipantId,
+    hiddenFromReceiver: receiverBlockedSender,
   };
 }
 

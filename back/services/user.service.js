@@ -3,6 +3,7 @@ const User = require("../models/User.model");
 const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
 const { isUserBlocked } = require("./block.service");
+const { getUnreadCount, getLastVisibleMessage } = require("./conversation.service");
 const { toPublicUser, normalizeNickname } = require("../utils/user.util");
 
 function isConversationMutedForUser(conversation, userId) {
@@ -104,19 +105,9 @@ async function getContacts(currentUserId) {
 
       const contactId = contact._id.toString();
       const blockedByMe = await isUserBlocked(currentUserId, contactId);
-      const blockedMe = await isUserBlocked(contactId, currentUserId);
 
-      const lastMessage = await Message.findOne({ conversationId: conversation._id })
-        .sort({ createdAt: -1 })
-        .lean();
-
-      const readerOid = new mongoose.Types.ObjectId(currentUserId);
-      const unreadCount = await Message.countDocuments({
-        conversationId: conversation._id,
-        sender: { $ne: currentUserId },
-        readBy: { $ne: readerOid },
-        deletedForEveryone: { $ne: true },
-      });
+      const lastMessage = await getLastVisibleMessage(conversation._id, currentUserId);
+      const unreadCount = await getUnreadCount(conversation._id, currentUserId);
 
       return {
         conversationId: conversation._id.toString(),
@@ -124,14 +115,17 @@ async function getContacts(currentUserId) {
         lastMessage: normalizeLastMessagePreview(lastMessage),
         muted: isConversationMutedForUser(conversation, currentUserId),
         blockedByMe,
-        blockedMe,
-        blocked: blockedByMe || blockedMe,
+        blocked: blockedByMe,
         unreadCount,
+        sortAt: lastMessage?.createdAt || conversation.lastMessageAt || conversation.updatedAt,
       };
     })
   );
 
-  return items.filter(Boolean);
+  return items
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.sortAt).getTime() - new Date(a.sortAt).getTime())
+    .map(({ sortAt, ...item }) => item);
 }
 
 async function getRelatedUserIdsForRealtime(currentUserId) {

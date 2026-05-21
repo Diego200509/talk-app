@@ -1,5 +1,6 @@
 export const SOCKET_EVENTS = {
   CONVERSATION_JOIN: "conversation:join",
+  CONVERSATION_LEAVE: "conversation:leave",
   CONVERSATION_READ: "conversation:read",
   MESSAGE_SEND: "message:send",
   MESSAGE_NEW: "message:new",

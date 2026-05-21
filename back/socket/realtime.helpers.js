@@ -48,7 +48,10 @@ async function emitUnreadUpdated(io, { conversationId, userId, fromUserId }) {
 
 async function isUserViewingConversation(io, conversationId, userId) {
   const sockets = await io.in(`conversation:${conversationId}`).fetchSockets();
-  return sockets.some((s) => s.data.userId === userId);
+  return sockets.some(
+    (s) =>
+      s.data.userId === userId && s.data.activeConversationId === conversationId
+  );
 }
 
 module.exports = {

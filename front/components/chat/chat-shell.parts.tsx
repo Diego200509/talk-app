@@ -121,16 +121,29 @@ export function ChatMessageBubble({
   const [menuOpen, setMenuOpen] = useState(false);
   const deleted = Boolean(message.deletedForEveryone);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeOnOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-message-menu-root]")) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [menuOpen]);
+
   return (
     <div
       className={cn(
         "group relative max-w-[88%]",
-        mine ? "self-end" : "self-start"
+        mine ? "self-end" : "self-start",
+        menuOpen && "z-50"
       )}
     >
       <div
         className={cn(
-          "overflow-hidden rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
+          "relative overflow-hidden rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
           mine
             ? "rounded-tr-md border border-violet-400/40 bg-violet-700 text-white"
             : "rounded-tl-md border border-white/10 bg-[#1a1a22] text-zinc-100",
@@ -157,26 +170,38 @@ export function ChatMessageBubble({
         </div>
       </div>
       {mine && !deleted && onDeleteForEveryone ? (
-        <div className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100">
+        <div
+          data-message-menu-root
+          className={cn(
+            "absolute -left-9 top-2 z-20",
+            "opacity-0 transition-opacity group-hover:opacity-100",
+            menuOpen && "opacity-100"
+          )}
+        >
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-lg p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
             aria-label="Opciones del mensaje"
+            aria-expanded={menuOpen}
           >
             <MoreVertical className="size-4" />
           </button>
           {menuOpen ? (
-            <div className="absolute left-0 top-full z-10 mt-1 w-44 rounded-lg border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+            <div
+              role="menu"
+              className="absolute left-0 top-full z-[100] mt-2 w-48 rounded-xl border border-white/15 bg-[#1c1c28] p-1.5 shadow-2xl ring-1 ring-black/40"
+            >
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
                   onDeleteForEveryone(message.id);
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-rose-300 hover:bg-rose-500/10"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-500/15"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-4 shrink-0" />
                 Eliminar para todos
               </button>
             </div>
@@ -187,10 +212,26 @@ export function ChatMessageBubble({
   );
 }
 
+export function BlockedUnblockBar({ onUnblock }: { onUnblock: () => void }) {
+  return (
+    <div className="flex min-h-[56px] w-full flex-1 flex-col items-center justify-center gap-3 border-t border-white/10 bg-[#14141c] px-4 py-4 md:min-h-[60px]">
+      <p className="text-center text-sm text-zinc-400">
+        Desbloquea a este usuario para enviarle mensajes.
+      </p>
+      <button
+        type="button"
+        onClick={onUnblock}
+        className="rounded-full bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-500"
+      >
+        Desbloquear
+      </button>
+    </div>
+  );
+}
+
 export function ConversationHeaderMenu({
   muted,
   blockedByMe,
-  blockedMe,
   onMute,
   onUnmute,
   onBlock,
@@ -198,7 +239,6 @@ export function ConversationHeaderMenu({
 }: {
   muted: boolean;
   blockedByMe: boolean;
-  blockedMe: boolean;
   onMute: () => void;
   onUnmute: () => void;
   onBlock: () => void;
@@ -270,11 +310,6 @@ export function ConversationHeaderMenu({
           )}
         </div>
       ) : null}
-      {(blockedByMe || blockedMe) && (
-        <p className="absolute -bottom-5 right-0 whitespace-nowrap text-[10px] text-amber-400/90">
-          {blockedMe ? "Te bloqueó" : "Usuario bloqueado"}
-        </p>
-      )}
     </div>
   );
 }

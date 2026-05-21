@@ -33,6 +33,7 @@ async function deleteMessage(req, res) {
     if (error.code === "FORBIDDEN_CONVERSATION") {
       return res.status(403).json({ message: error.message });
     }
+    console.error("deleteMessage:", error.message);
     return res.status(500).json({ message: "No se pudo eliminar el mensaje" });
   }
 }

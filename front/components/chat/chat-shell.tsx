@@ -44,6 +44,7 @@ import {
   ChatUserStrip,
   ContactsDirectoryPanel,
   ConversationHeaderMenu,
+  BlockedUnblockBar,
   MessageComposer,
   ProfileEditorPanel,
   MessageStatusChecks,
@@ -73,6 +74,7 @@ export function ChatShell() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const notifiedPermissionRef = useRef(false);
   const activeConversationIdRef = useRef<string | null>(null);
+  const joinedConversationIdRef = useRef<string | null>(null);
   activeConversationIdRef.current = activeConversationId;
 
   const { isOnline } = useOnlineUsers(token);
@@ -82,8 +84,6 @@ export function ChatShell() {
   const blockedByMe = Boolean(
     activeUser && (isBlockedByMe(activeUser.id) || activeContact?.blockedByMe)
   );
-  const blockedMe = Boolean(activeContact?.blockedMe);
-  const chatBlocked = Boolean(blockedByMe || blockedMe || activeContact?.blocked);
   const conversationMuted = activeContact?.muted ?? false;
 
   const chatSearchTerm = searchTerm.trim().toLowerCase();
@@ -168,12 +168,15 @@ export function ChatShell() {
       const next = [...prev];
       const contact = next[idx];
       const isActiveChat = payload.conversationId === activeConversationIdRef.current;
+      const fromOther = payload.message.senderId !== authUser?.id;
       const unreadCount =
         payload.unreadCount !== undefined
           ? payload.unreadCount
           : isActiveChat
             ? 0
-            : contact.unreadCount ?? 0;
+            : fromOther
+              ? (contact.unreadCount ?? 0) + 1
+              : contact.unreadCount ?? 0;
 
       next[idx] = patchContactWithMessage(contact, payload.message, unreadCount);
       next.sort((a, b) => {
@@ -188,16 +191,21 @@ export function ChatShell() {
   const notifyIncomingMessage = useCallback(
     (message: ChatMessage, contact?: ContactItem) => {
       if (message.senderId === authUser?.id) return;
-      const isActive =
+      if (contact?.blockedByMe) return;
+      const isViewingThisChat =
         message.conversationId === activeConversationId &&
-        document.visibilityState === "visible";
-      if (isActive) return;
+        document.visibilityState === "visible" &&
+        document.hasFocus();
+      if (isViewingThisChat) return;
       const muted = contact?.muted ?? false;
       if (muted) return;
 
       playNotificationSound();
       const senderName = contact?.user ? sidebarTitle(contact.user) : "Nuevo mensaje";
-      showDesktopNotification(senderName, message.content || "Nuevo mensaje");
+      showDesktopNotification(senderName, message.content || "Nuevo mensaje", {
+        conversationId: message.conversationId,
+        messageId: message.id,
+      });
     },
     [authUser?.id, activeConversationId]
   );
@@ -374,9 +382,24 @@ export function ChatShell() {
   });
 
   useEffect(() => {
-    if (!token || !activeConversationId) return;
+    if (!token) return;
     const socket = getSocket(token);
+    const previousJoined = joinedConversationIdRef.current;
+
+    if (!activeConversationId) {
+      if (previousJoined) {
+        socket.emit(SOCKET_EVENTS.CONVERSATION_LEAVE, { conversationId: previousJoined });
+        joinedConversationIdRef.current = null;
+      }
+      return;
+    }
+
+    if (previousJoined && previousJoined !== activeConversationId) {
+      socket.emit(SOCKET_EVENTS.CONVERSATION_LEAVE, { conversationId: previousJoined });
+    }
+
     socket.emit(SOCKET_EVENTS.CONVERSATION_JOIN, { conversationId: activeConversationId });
+    joinedConversationIdRef.current = activeConversationId;
     setTypingUserId(null);
     setContacts((prev) =>
       prev.map((c) =>
@@ -442,7 +465,6 @@ export function ChatShell() {
             muted: conversation.muted,
             unreadCount: conversation.unreadCount ?? 0,
             blockedByMe: conversation.blockedByMe,
-            blockedMe: conversation.blockedMe,
             blocked: conversation.blocked,
           };
           if (idx >= 0) {
@@ -482,13 +504,13 @@ export function ChatShell() {
   }
 
   async function sendMessage(content: string) {
-    if (!token || !activeConversationId || chatBlocked) return;
+    if (!token || !activeConversationId || blockedByMe) return;
     const socket = getSocket(token);
     socket.emit(SOCKET_EVENTS.MESSAGE_SEND, { conversationId: activeConversationId, content });
   }
 
   function handleTypingChange(typing: boolean) {
-    if (!token || !activeConversationId || chatBlocked) return;
+    if (!token || !activeConversationId || blockedByMe) return;
     const socket = getSocket(token);
     if (typing) {
       socket.emit(SOCKET_EVENTS.USER_TYPING, { conversationId: activeConversationId });
@@ -501,8 +523,9 @@ export function ChatShell() {
     try {
       const message = await deleteMessageForEveryoneRequest(messageId);
       patchMessageInState(message);
-    } catch {
-      setSocketError("No se pudo eliminar el mensaje");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setSocketError(axiosErr.response?.data?.message || "No se pudo eliminar el mensaje");
     }
   }
 
@@ -607,7 +630,6 @@ export function ChatShell() {
                   <ConversationHeaderMenu
                     muted={conversationMuted}
                     blockedByMe={blockedByMe}
-                    blockedMe={blockedMe}
                     onMute={() => void handleMute()}
                     onUnmute={() => void handleUnmute()}
                     onBlock={() => void handleBlock()}
@@ -790,15 +812,8 @@ export function ChatShell() {
 
           <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0B0B0F]">
             {hasActiveConversation ? (
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#0c0c10] p-3 sm:p-4">
-                {chatBlocked ? (
-                  <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                    {blockedMe
-                      ? "Este usuario te bloqueó. No puedes enviar mensajes."
-                      : "Has bloqueado a este usuario. Desbloquéalo para volver a escribir."}
-                  </p>
-                ) : null}
-                <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
+              <div className="min-h-0 flex-1 overflow-x-visible overflow-y-auto overscroll-contain bg-[#0c0c10] p-3 sm:p-4">
+                <div className="relative mx-auto flex max-w-3xl flex-col gap-2.5">
                   {loadingMessages ? (
                     <p className="text-sm text-zinc-500">Cargando mensajes...</p>
                   ) : null}
@@ -846,11 +861,15 @@ export function ChatShell() {
           </div>
           {hasActiveConversation ? (
             <div className="flex min-h-0 min-w-0 flex-1 border-t border-white/10 md:border-t-0 md:border-l md:border-white/10">
-              <MessageComposer
-                disabled={!activeConversationId || chatBlocked}
-                onSend={sendMessage}
-                onTypingChange={handleTypingChange}
-              />
+              {blockedByMe ? (
+                <BlockedUnblockBar onUnblock={() => void handleUnblock()} />
+              ) : (
+                <MessageComposer
+                  disabled={!activeConversationId}
+                  onSend={sendMessage}
+                  onTypingChange={handleTypingChange}
+                />
+              )}
             </div>
           ) : (
             <div className="hidden md:block md:min-h-0 md:min-w-0 md:flex-1 md:border-l md:border-white/10" />
