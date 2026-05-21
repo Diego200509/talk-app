@@ -16,3 +16,13 @@ export async function getConversationMessagesRequest(conversationId: string): Pr
   );
   return data.messages;
 }
+
+export async function muteConversationRequest(conversationId: string): Promise<{ muted: boolean }> {
+  const { data } = await apiClient.post<{ muted: boolean }>(`/conversations/${conversationId}/mute`);
+  return data;
+}
+
+export async function unmuteConversationRequest(conversationId: string): Promise<{ muted: boolean }> {
+  const { data } = await apiClient.post<{ muted: boolean }>(`/conversations/${conversationId}/unmute`);
+  return data;
+}

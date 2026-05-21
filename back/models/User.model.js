@@ -27,6 +27,12 @@ const userSchema = new mongoose.Schema(
       default: "Disponible",
     },
     avatarUrl: { type: String, default: "" },
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );

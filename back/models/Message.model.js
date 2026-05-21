@@ -20,6 +20,20 @@ const messageSchema = new mongoose.Schema(
       trim: true,
       maxlength: 4000,
     },
+    deletedForEveryone: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deliveredBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );

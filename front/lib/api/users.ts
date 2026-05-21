@@ -43,3 +43,16 @@ export async function getDirectoryUsersRequest(query?: string): Promise<ChatUser
   });
   return data.users;
 }
+
+export async function blockUserRequest(targetUserId: string): Promise<void> {
+  await apiClient.post("/users/block", { targetUserId });
+}
+
+export async function unblockUserRequest(targetUserId: string): Promise<void> {
+  await apiClient.post("/users/unblock", { targetUserId });
+}
+
+export async function getBlockedUsersRequest(): Promise<ChatUser[]> {
+  const { data } = await apiClient.get<{ users: ChatUser[] }>("/users/blocked");
+  return data.users;
+}

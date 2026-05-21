@@ -7,8 +7,7 @@ const { Server } = require("socket.io");
 const { createApp } = require("./app");
 const { verifyAccessToken } = require("./utils/jwt.util");
 const { assertTokenNotRevoked } = require("./services/auth.service");
-const { assertConversationAccess } = require("./services/conversation.service");
-const { createMessage } = require("./services/message.service");
+const { registerChatHandlers } = require("./socket/chat.handlers");
 
 const clientUrl = process.env.CLIENT_URL;
 
@@ -22,40 +21,7 @@ const io = new Server(server, {
 });
 app.set("io", io);
 
-io.on("connection", (socket) => {
-  socket.on("conversation:join", async ({ conversationId }) => {
-    try {
-      if (!conversationId) return;
-      await assertConversationAccess(conversationId, socket.data.userId);
-      socket.join(`conversation:${conversationId}`);
-    } catch {
-      socket.emit("chat:error", { message: "No autorizado para unirse a esta conversación" });
-    }
-  });
-
-  socket.on("message:send", async ({ conversationId, content }) => {
-    try {
-      const { message, participantIds } = await createMessage({
-        conversationId,
-        senderId: socket.data.userId,
-        content,
-      });
-
-      io.to(`conversation:${conversationId}`).emit("message:new", message);
-      participantIds.forEach((participantId) => {
-        io.to(`user:${participantId}`).emit("conversation:updated", {
-          conversationId,
-          message,
-        });
-        io.to(`user:${participantId}`).emit("contacts:refresh");
-      });
-    } catch (error) {
-      socket.emit("chat:error", { message: error.message || "No se pudo enviar el mensaje" });
-    }
-  });
-
-  socket.on("disconnect", () => {});
-});
+registerChatHandlers(io);
 
 app.get("/health", (req, res) => {
   const dbOk = mongoose.connection.readyState === 1;

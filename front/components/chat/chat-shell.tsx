@@ -1,33 +1,54 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, Search, X } from "lucide-react";
+import { BellOff, MessageCircle, Search, X } from "lucide-react";
 import {
   getContactsRequest,
   getDirectoryUsersRequest,
   updateProfileRequest,
 } from "@/lib/api/users";
-import { getOrCreateDirectConversationRequest, getConversationMessagesRequest } from "@/lib/api/conversations";
+import {
+  getOrCreateDirectConversationRequest,
+  getConversationMessagesRequest,
+  muteConversationRequest,
+  unmuteConversationRequest,
+} from "@/lib/api/conversations";
+import { deleteMessageForEveryoneRequest } from "@/lib/api/messages";
 import { RequireAuth } from "@/components/chat/require-auth";
 import { useAuthStore } from "@/stores/auth-store";
-import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useChatSocket, type ConversationUpdatedPayload } from "@/hooks/use-chat-socket";
+import { useOnlineUsers } from "@/hooks/use-online-users";
+import { useBlocked } from "@/hooks/use-blocked";
 import { getSocket } from "@/lib/socket";
+import { SOCKET_EVENTS } from "@/lib/socket-events";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChatUser, ContactItem } from "@/types/chat";
+import { lastMessagePreviewText } from "@/lib/chat/message-status";
+import {
+  playNotificationSound,
+  requestNotificationPermission,
+  showDesktopNotification,
+} from "@/lib/notifications/play-notification-sound";
 import {
   LeftPanelMode,
   HEADER_H,
   chatListTimestampLabel,
-  messageTimestampLabel,
+  mergeMessages,
+  patchContactWithMessage,
   sidebarTitle,
+  upsertMessage,
 } from "./chat-shell.helpers";
 import {
   Avatar,
+  ChatMessageBubble,
   ChatUserStrip,
   ContactsDirectoryPanel,
+  ConversationHeaderMenu,
   MessageComposer,
   ProfileEditorPanel,
+  MessageStatusChecks,
   TalkAppBrand,
+  UnreadBadge,
 } from "./chat-shell.parts";
 
 export function ChatShell() {
@@ -47,7 +68,23 @@ export function ChatShell() {
   const [profileStatus, setProfileStatus] = useState<string>("Disponible");
   const [profileAvatar, setProfileAvatar] = useState<File | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [typingUserId, setTypingUserId] = useState<string | null>(null);
+  const [socketError, setSocketError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const notifiedPermissionRef = useRef(false);
+  const activeConversationIdRef = useRef<string | null>(null);
+  activeConversationIdRef.current = activeConversationId;
+
+  const { isOnline } = useOnlineUsers(token);
+  const { isBlockedByMe, blockUser, unblockUser, refresh: refreshBlocked } = useBlocked(token);
+
+  const activeContact = contacts.find((c) => c.conversationId === activeConversationId);
+  const blockedByMe = Boolean(
+    activeUser && (isBlockedByMe(activeUser.id) || activeContact?.blockedByMe)
+  );
+  const blockedMe = Boolean(activeContact?.blockedMe);
+  const chatBlocked = Boolean(blockedByMe || blockedMe || activeContact?.blocked);
+  const conversationMuted = activeContact?.muted ?? false;
 
   const chatSearchTerm = searchTerm.trim().toLowerCase();
   const visibleList = contacts
@@ -61,14 +98,19 @@ export function ChatShell() {
     });
 
   const refreshContacts = useCallback(async () => {
-    const list = await getContactsRequest();
-    setContacts(list);
-    if (!activeConversationId) return;
-    const current = list.find((item) => item.conversationId === activeConversationId);
-    if (current?.user) {
-      setActiveUser(current.user);
+    if (!token) return;
+    try {
+      const list = await getContactsRequest();
+      setContacts(list);
+      if (!activeConversationId) return;
+      const current = list.find((item) => item.conversationId === activeConversationId);
+      if (current?.user) {
+        setActiveUser(current.user);
+      }
+    } catch {
+      /* 401: el interceptor redirige a login; evitar unhandledRejection */
     }
-  }, [activeConversationId]);
+  }, [activeConversationId, token]);
 
   useEffect(() => {
     const task = setTimeout(() => {
@@ -76,6 +118,13 @@ export function ChatShell() {
     }, 0);
     return () => clearTimeout(task);
   }, [refreshContacts]);
+
+  useEffect(() => {
+    if (!notifiedPermissionRef.current) {
+      notifiedPermissionRef.current = true;
+      void requestNotificationPermission();
+    }
+  }, []);
 
   useEffect(() => {
     if (leftPanelMode !== "contacts") return;
@@ -86,42 +135,132 @@ export function ChatShell() {
     return () => clearTimeout(timeout);
   }, [leftPanelMode, directorySearch]);
 
+  const markConversationRead = useCallback(
+    (conversationId: string) => {
+      if (!token) return;
+      getSocket(token).emit(SOCKET_EVENTS.CONVERSATION_READ, { conversationId });
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.conversationId === conversationId ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    },
+    [token]
+  );
+
+  const patchMessageInState = useCallback((message: ChatMessage) => {
+    setMessages((prev) => upsertMessage(prev, message));
+    setContacts((prev) =>
+      prev.map((item) => {
+        if (item.conversationId !== message.conversationId) return item;
+        return patchContactWithMessage(item, message);
+      })
+    );
+  }, []);
+
+  const updateContactsFromPayload = useCallback((payload: ConversationUpdatedPayload) => {
+    setContacts((prev) => {
+      const idx = prev.findIndex((item) => item.conversationId === payload.conversationId);
+      if (idx === -1) {
+        void refreshContacts();
+        return prev;
+      }
+      const next = [...prev];
+      const contact = next[idx];
+      const isActiveChat = payload.conversationId === activeConversationIdRef.current;
+      const unreadCount =
+        payload.unreadCount !== undefined
+          ? payload.unreadCount
+          : isActiveChat
+            ? 0
+            : contact.unreadCount ?? 0;
+
+      next[idx] = patchContactWithMessage(contact, payload.message, unreadCount);
+      next.sort((a, b) => {
+        const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+        const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+        return bt - at;
+      });
+      return next;
+    });
+  }, [authUser?.id, refreshContacts]);
+
+  const notifyIncomingMessage = useCallback(
+    (message: ChatMessage, contact?: ContactItem) => {
+      if (message.senderId === authUser?.id) return;
+      const isActive =
+        message.conversationId === activeConversationId &&
+        document.visibilityState === "visible";
+      if (isActive) return;
+      const muted = contact?.muted ?? false;
+      if (muted) return;
+
+      playNotificationSound();
+      const senderName = contact?.user ? sidebarTitle(contact.user) : "Nuevo mensaje";
+      showDesktopNotification(senderName, message.content || "Nuevo mensaje");
+    },
+    [authUser?.id, activeConversationId]
+  );
+
   const onMessage = useCallback(
     (message: ChatMessage) => {
-      if (message.conversationId === activeConversationId) {
-        setMessages((prev) => [...prev, message]);
+      const isActive = message.conversationId === activeConversationIdRef.current;
+      const isVisible = typeof document !== "undefined" && document.visibilityState === "visible";
+      const fromOther = message.senderId !== authUser?.id;
+      const isMine = message.senderId === authUser?.id;
+
+      if (isActive || isMine) {
+        setMessages((prev) => upsertMessage(prev, message));
+      }
+      if (isMine) {
+        patchMessageInState(message);
+      }
+      if (isActive && fromOther && isVisible) {
+        markConversationRead(message.conversationId);
+      }
+
+      if (fromOther) {
+        const contact = contacts.find((c) => c.conversationId === message.conversationId);
+        notifyIncomingMessage(message, contact);
       }
     },
-    [activeConversationId]
+    [authUser?.id, contacts, notifyIncomingMessage, markConversationRead, patchMessageInState]
   );
 
   const onConversationUpdated = useCallback(
-    (payload: { conversationId: string; message: ChatMessage }) => {
-      setContacts((prev) => {
-        const idx = prev.findIndex((item) => item.conversationId === payload.conversationId);
-        if (idx === -1) {
-          void refreshContacts();
-          return prev;
-        }
-        const next = [...prev];
-        next[idx] = { ...next[idx], lastMessage: payload.message };
-        next.sort((a, b) => {
-          const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
-          const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
-          return bt - at;
-        });
-        return next;
-      });
+    (payload: ConversationUpdatedPayload) => {
+      updateContactsFromPayload(payload);
+      if (payload.conversationId === activeConversationIdRef.current) {
+        setMessages((prev) => upsertMessage(prev, payload.message));
+      }
+      if (payload.message.senderId !== authUser?.id) {
+        const contact = contacts.find((c) => c.conversationId === payload.conversationId);
+        notifyIncomingMessage(payload.message, contact);
+      }
     },
-    [refreshContacts]
+    [updateContactsFromPayload, authUser?.id, contacts, notifyIncomingMessage]
+  );
+
+  const onUnreadUpdated = useCallback(
+    (payload: { conversationId: string; unreadCount: number }) => {
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.conversationId === payload.conversationId
+            ? { ...c, unreadCount: payload.unreadCount }
+            : c
+        )
+      );
+    },
+    []
   );
 
   const onContactsRefresh = useCallback(() => {
     void refreshContacts();
+    void refreshBlocked();
     if (leftPanelMode === "contacts") {
       void getDirectoryUsersRequest(directorySearch.trim() || undefined).then(setDirectoryUsers);
     }
-  }, [refreshContacts, leftPanelMode, directorySearch]);
+  }, [refreshContacts, refreshBlocked, leftPanelMode, directorySearch]);
 
   const onUserUpdated = useCallback(
     (user: ChatUser) => {
@@ -140,19 +279,121 @@ export function ChatShell() {
     [token, setSession, leftPanelMode]
   );
 
+  const onConversationHistory = useCallback(
+    (payload: { conversationId: string; messages: ChatMessage[] }) => {
+      if (payload.conversationId !== activeConversationId) return;
+      setMessages((prev) => mergeMessages(prev, payload.messages));
+      setLoadingMessages(false);
+    },
+    [activeConversationId]
+  );
+
+  const onMessageDeleted = useCallback((message: ChatMessage) => {
+    patchMessageInState(message);
+  }, [patchMessageInState]);
+
+  const onMessageDelivered = useCallback(
+    (message: ChatMessage) => {
+      patchMessageInState(message);
+    },
+    [patchMessageInState]
+  );
+
+  const onMessageRead = useCallback(
+    (message: ChatMessage) => {
+      patchMessageInState(message);
+    },
+    [patchMessageInState]
+  );
+
+  const onUserTyping = useCallback(
+    (payload: { conversationId: string; userId: string }) => {
+      if (payload.conversationId !== activeConversationId) return;
+      if (payload.userId === authUser?.id) return;
+      setTypingUserId(payload.userId);
+    },
+    [activeConversationId, authUser?.id]
+  );
+
+  const onUserStoppedTyping = useCallback(
+    (payload: { conversationId: string; userId: string }) => {
+      if (payload.conversationId !== activeConversationId) return;
+      setTypingUserId((prev) => (prev === payload.userId ? null : prev));
+    },
+    [activeConversationId]
+  );
+
+  const setConversationMuted = useCallback((conversationId: string, muted: boolean) => {
+    setContacts((prev) =>
+      prev.map((c) => (c.conversationId === conversationId ? { ...c, muted } : c))
+    );
+  }, []);
+
+  const onConversationMuted = useCallback(
+    (payload: { conversationId: string; muted?: boolean }) => {
+      setConversationMuted(payload.conversationId, payload.muted ?? true);
+    },
+    [setConversationMuted]
+  );
+
+  const onConversationUnmuted = useCallback(
+    (payload: { conversationId: string; muted?: boolean }) => {
+      setConversationMuted(payload.conversationId, payload.muted ?? false);
+    },
+    [setConversationMuted]
+  );
+
+  const onUserBlocked = useCallback(() => {
+    void refreshContacts();
+    void refreshBlocked();
+  }, [refreshContacts, refreshBlocked]);
+
+  const onUserUnblocked = useCallback(() => {
+    void refreshContacts();
+    void refreshBlocked();
+  }, [refreshContacts, refreshBlocked]);
+
   useChatSocket({
     token,
     onMessage,
     onConversationUpdated,
+    onUnreadUpdated,
     onContactsRefresh,
     onUserUpdated,
+    onSocketError: setSocketError,
+    onConversationHistory,
+    onMessageDeleted,
+    onMessageDelivered,
+    onMessageRead,
+    onUserTyping,
+    onUserStoppedTyping,
+    onConversationMuted,
+    onConversationUnmuted,
+    onUserBlocked,
+    onUserUnblocked,
   });
 
   useEffect(() => {
     if (!token || !activeConversationId) return;
     const socket = getSocket(token);
-    socket.emit("conversation:join", { conversationId: activeConversationId });
+    socket.emit(SOCKET_EVENTS.CONVERSATION_JOIN, { conversationId: activeConversationId });
+    setTypingUserId(null);
+    setContacts((prev) =>
+      prev.map((c) =>
+        c.conversationId === activeConversationId ? { ...c, unreadCount: 0 } : c
+      )
+    );
   }, [token, activeConversationId]);
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      const convId = activeConversationIdRef.current;
+      if (convId) markConversationRead(convId);
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [markConversationRead]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -163,6 +404,7 @@ export function ChatShell() {
       setMessages([]);
       setLoadingMessages(false);
       setLeftPanelMode("chats");
+      setTypingUserId(null);
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -178,15 +420,61 @@ export function ChatShell() {
   }, [messages, activeConversationId, loadingMessages]);
 
   async function openConversationWithUser(user: ChatUser) {
-    // Seleccion optimista para que el header cambie al primer clic.
     setActiveUser(user);
     setLeftPanelMode("chats");
-    const conversation = await getOrCreateDirectConversationRequest(user.id);
-    setActiveConversationId(conversation.id);
     setLoadingMessages(true);
+    setSocketError(null);
+
+    const existingContact = contacts.find((c) => c.user.id === user.id);
+
     try {
-      const list = await getConversationMessagesRequest(conversation.id);
+      let conversationId = existingContact?.conversationId ?? null;
+
+      if (!conversationId) {
+        const conversation = await getOrCreateDirectConversationRequest(user.id);
+        conversationId = conversation.id;
+        setContacts((prev) => {
+          const idx = prev.findIndex((c) => c.conversationId === conversation.id);
+          const entry: ContactItem = {
+            conversationId: conversation.id,
+            user,
+            lastMessage: conversation.lastMessage,
+            muted: conversation.muted,
+            unreadCount: conversation.unreadCount ?? 0,
+            blockedByMe: conversation.blockedByMe,
+            blockedMe: conversation.blockedMe,
+            blocked: conversation.blocked,
+          };
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...entry };
+            return next;
+          }
+          return [entry, ...prev];
+        });
+      }
+
+      setActiveConversationId(conversationId);
+      const list = await getConversationMessagesRequest(conversationId);
       setMessages(list);
+
+      if (existingContact) {
+        setContacts((prev) =>
+          prev.map((c) =>
+            c.user.id === user.id ? { ...c, unreadCount: 0 } : c
+          )
+        );
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { message?: string } } };
+      const msg =
+        axiosErr.response?.data?.message ||
+        (axiosErr.response?.status === 403
+          ? "No puedes abrir esta conversación"
+          : "No se pudo abrir la conversación");
+      setSocketError(msg);
+      setActiveConversationId(null);
+      setMessages([]);
     } finally {
       setLoadingMessages(false);
     }
@@ -194,9 +482,52 @@ export function ChatShell() {
   }
 
   async function sendMessage(content: string) {
-    if (!token || !activeConversationId) return;
+    if (!token || !activeConversationId || chatBlocked) return;
     const socket = getSocket(token);
-    socket.emit("message:send", { conversationId: activeConversationId, content });
+    socket.emit(SOCKET_EVENTS.MESSAGE_SEND, { conversationId: activeConversationId, content });
+  }
+
+  function handleTypingChange(typing: boolean) {
+    if (!token || !activeConversationId || chatBlocked) return;
+    const socket = getSocket(token);
+    if (typing) {
+      socket.emit(SOCKET_EVENTS.USER_TYPING, { conversationId: activeConversationId });
+    } else {
+      socket.emit(SOCKET_EVENTS.USER_STOPPED_TYPING, { conversationId: activeConversationId });
+    }
+  }
+
+  async function handleDeleteForEveryone(messageId: string) {
+    try {
+      const message = await deleteMessageForEveryoneRequest(messageId);
+      patchMessageInState(message);
+    } catch {
+      setSocketError("No se pudo eliminar el mensaje");
+    }
+  }
+
+  async function handleMute() {
+    if (!activeConversationId) return;
+    await muteConversationRequest(activeConversationId);
+    setConversationMuted(activeConversationId, true);
+  }
+
+  async function handleUnmute() {
+    if (!activeConversationId) return;
+    await unmuteConversationRequest(activeConversationId);
+    setConversationMuted(activeConversationId, false);
+  }
+
+  async function handleBlock() {
+    if (!activeUser) return;
+    await blockUser(activeUser.id);
+    onUserBlocked();
+  }
+
+  async function handleUnblock() {
+    if (!activeUser) return;
+    await unblockUser(activeUser.id);
+    onUserUnblocked();
   }
 
   async function saveProfile(payload: { nickname: string; status: string; avatar: File | null }) {
@@ -234,13 +565,17 @@ export function ChatShell() {
   }
 
   const activeHeaderName = activeUser ? sidebarTitle(activeUser) : "Selecciona una conversación";
-  const activeHeaderStatus = activeUser?.status || "Sin estado";
+  const activeUserOnline = activeUser ? isOnline(activeUser.id) : false;
+  const headerStatus = typingUserId
+    ? "Escribiendo…"
+    : activeUserOnline
+      ? "En línea"
+      : activeUser?.status || "Sin estado";
   const hasActiveConversation = Boolean(activeConversationId);
 
   return (
     <RequireAuth>
       <div className="flex h-[100dvh] max-h-[100dvh] flex-col bg-[#0B0B0F] text-zinc-100">
-        {/* Fila superior: logo (columna bandeja) + cabecera del chat al mismo nivel — sin buscador */}
         <div className="grid shrink-0 grid-cols-1 border-b border-white/10 md:grid-cols-[380px_minmax(0,1fr)]">
           <TalkAppBrand onClick={() => setLeftPanelMode("chats")} />
           {hasActiveConversation ? (
@@ -252,11 +587,32 @@ export function ChatShell() {
             >
               {activeUser ? (
                 <>
-                  <Avatar user={activeUser} />
-                  <div className="min-w-0">
-                    <h2 className="truncate font-semibold text-zinc-100">{activeHeaderName}</h2>
-                    <p className="truncate text-xs text-zinc-500">{activeHeaderStatus}</p>
+                  <Avatar user={activeUser} showOnline isOnline={activeUserOnline} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate font-semibold text-zinc-100">{activeHeaderName}</h2>
+                      {conversationMuted ? (
+                        <BellOff className="size-3.5 shrink-0 text-zinc-500" aria-label="Silenciado" />
+                      ) : null}
+                    </div>
+                    <p
+                      className={cn(
+                        "truncate text-xs",
+                        typingUserId ? "text-violet-300" : "text-zinc-500"
+                      )}
+                    >
+                      {headerStatus}
+                    </p>
                   </div>
+                  <ConversationHeaderMenu
+                    muted={conversationMuted}
+                    blockedByMe={blockedByMe}
+                    blockedMe={blockedMe}
+                    onMute={() => void handleMute()}
+                    onUnmute={() => void handleUnmute()}
+                    onBlock={() => void handleBlock()}
+                    onUnblock={() => void handleUnblock()}
+                  />
                 </>
               ) : null}
             </div>
@@ -265,7 +621,19 @@ export function ChatShell() {
           )}
         </div>
 
-        {/* Cuerpo: bandeja | mensajes */}
+        {socketError ? (
+          <p className="shrink-0 bg-rose-950/80 px-4 py-1.5 text-center text-xs text-rose-200">
+            {socketError}
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={() => setSocketError(null)}
+            >
+              Cerrar
+            </button>
+          </p>
+        ) : null}
+
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
           <aside
             className={cn(
@@ -294,6 +662,7 @@ export function ChatShell() {
                 searchTerm={directorySearch}
                 onSearchTermChange={setDirectorySearch}
                 onOpenConversation={(user) => void openConversationWithUser(user)}
+                isOnline={isOnline}
               />
             ) : (
               <>
@@ -327,10 +696,18 @@ export function ChatShell() {
                       !!contact &&
                       !!activeConversationId &&
                       contact.conversationId === activeConversationId;
-                    const preview = contact?.lastMessage?.content || "Sin mensajes todavía";
+                    const preview = lastMessagePreviewText(contact?.lastMessage);
                     const time = contact?.lastMessage?.createdAt
                       ? chatListTimestampLabel(contact.lastMessage.createdAt)
                       : "";
+                    const userOnline = isOnline(user.id);
+                    const lastMsg = contact?.lastMessage;
+                    const showChecks =
+                      lastMsg &&
+                      lastMsg.senderId === authUser?.id &&
+                      !lastMsg.deletedForEveryone;
+                    const unread = contact?.unreadCount ?? 0;
+                    const hasUnread = unread > 0 && !isActive;
                     return (
                       <li key={user.id}>
                         <button
@@ -338,7 +715,11 @@ export function ChatShell() {
                           onClick={() => void openConversationWithUser(user)}
                           className={cn(
                             "flex w-full gap-3 border-b border-white/5 px-3 py-3 text-left transition-colors sm:px-4",
-                            isActive ? "bg-violet-950/50" : "hover:bg-white/[0.04]"
+                            isActive
+                              ? "bg-violet-950/50"
+                              : hasUnread
+                                ? "bg-white/[0.02] hover:bg-white/[0.06]"
+                                : "hover:bg-white/[0.04]"
                           )}
                         >
                           <div className="shrink-0" aria-hidden>
@@ -349,21 +730,54 @@ export function ChatShell() {
                                 "size-11",
                                 isActive ? "bg-violet-600" : "bg-zinc-600"
                               )}
+                              showOnline
+                              isOnline={userOnline}
                             />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
                               <span
                                 className={cn(
-                                  "truncate font-medium",
-                                  isActive ? "text-violet-200" : "text-zinc-100"
+                                  "truncate",
+                                  isActive
+                                    ? "font-medium text-violet-200"
+                                    : hasUnread
+                                      ? "font-semibold text-zinc-50"
+                                      : "font-medium text-zinc-100"
                                 )}
                               >
                                 {sidebarTitle(user)}
                               </span>
-                              <span className="shrink-0 text-[11px] text-zinc-500">{time}</span>
+                              <span className="flex shrink-0 items-center gap-1.5">
+                                {contact?.muted ? (
+                                  <BellOff className="size-3 text-zinc-600" />
+                                ) : null}
+                                {hasUnread ? <UnreadBadge count={unread} /> : null}
+                                <span
+                                  className={cn(
+                                    "text-[11px]",
+                                    hasUnread ? "font-medium text-emerald-400/90" : "text-zinc-500"
+                                  )}
+                                >
+                                  {time}
+                                </span>
+                              </span>
                             </div>
-                            <p className="truncate text-sm text-zinc-500">{preview}</p>
+                            <p
+                              className={cn(
+                                "flex items-center gap-1 truncate text-sm",
+                                hasUnread ? "font-medium text-zinc-300" : "text-zinc-500"
+                              )}
+                            >
+                              {showChecks && lastMsg ? (
+                                <MessageStatusChecks
+                                  message={lastMsg}
+                                  currentUserId={authUser?.id}
+                                  otherUserId={user.id}
+                                />
+                              ) : null}
+                              <span className="truncate">{preview}</span>
+                            </p>
                           </div>
                         </button>
                       </li>
@@ -377,6 +791,13 @@ export function ChatShell() {
           <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0B0B0F]">
             {hasActiveConversation ? (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#0c0c10] p-3 sm:p-4">
+                {chatBlocked ? (
+                  <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                    {blockedMe
+                      ? "Este usuario te bloqueó. No puedes enviar mensajes."
+                      : "Has bloqueado a este usuario. Desbloquéalo para volver a escribir."}
+                  </p>
+                ) : null}
                 <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
                   {loadingMessages ? (
                     <p className="text-sm text-zinc-500">Cargando mensajes...</p>
@@ -384,27 +805,20 @@ export function ChatShell() {
                   {!loadingMessages && messages.length === 0 ? (
                     <p className="text-sm text-zinc-500">Aun no hay mensajes en esta conversación.</p>
                   ) : null}
-                  {messages.map((message) => {
-                    const mine = message.senderId === authUser?.id;
-                    return (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          "max-w-[88%] overflow-hidden rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
-                          mine
-                            ? "self-end rounded-tr-md border border-violet-400/40 bg-violet-700 text-white"
-                            : "self-start rounded-tl-md border border-white/10 bg-[#1a1a22] text-zinc-100"
-                        )}
-                      >
-                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                          {message.content}
-                        </p>
-                        <p className={cn("mt-1 text-[10px]", mine ? "text-violet-100/90" : "opacity-70")}>
-                          {messageTimestampLabel(message.createdAt)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {messages.map((message) => (
+                    <ChatMessageBubble
+                      key={message.id}
+                      message={message}
+                      mine={message.senderId === authUser?.id}
+                      currentUserId={authUser?.id}
+                      otherUserId={activeUser?.id}
+                      onDeleteForEveryone={
+                        message.senderId === authUser?.id && !message.deletedForEveryone
+                          ? (id) => void handleDeleteForEveryone(id)
+                          : undefined
+                      }
+                    />
+                  ))}
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -432,7 +846,11 @@ export function ChatShell() {
           </div>
           {hasActiveConversation ? (
             <div className="flex min-h-0 min-w-0 flex-1 border-t border-white/10 md:border-t-0 md:border-l md:border-white/10">
-              <MessageComposer disabled={!activeConversationId} onSend={sendMessage} />
+              <MessageComposer
+                disabled={!activeConversationId || chatBlocked}
+                onSend={sendMessage}
+                onTypingChange={handleTypingChange}
+              />
             </div>
           ) : (
             <div className="hidden md:block md:min-h-0 md:min-w-0 md:flex-1 md:border-l md:border-white/10" />

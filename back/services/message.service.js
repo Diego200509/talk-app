@@ -1,6 +1,6 @@
 const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
-const { assertConversationAccess, normalizeMessage } = require("./conversation.service");
+const { assertMessagingAllowed, normalizeMessage } = require("./conversation.service");
 
 async function createMessage({ conversationId, senderId, content }) {
   const cleanContent = String(content || "").trim();
@@ -10,11 +10,14 @@ async function createMessage({ conversationId, senderId, content }) {
     throw err;
   }
 
-  const conversation = await assertConversationAccess(conversationId, senderId);
+  const { conversation, otherParticipantId } = await assertMessagingAllowed(senderId, conversationId);
+
   const message = await Message.create({
     conversationId,
     sender: senderId,
     content: cleanContent,
+    deliveredBy: [],
+    readBy: [],
   });
 
   await Conversation.updateOne(
@@ -25,6 +28,7 @@ async function createMessage({ conversationId, senderId, content }) {
   return {
     message: normalizeMessage(message),
     participantIds: conversation.participants.map((id) => id.toString()),
+    otherParticipantId,
   };
 }
 

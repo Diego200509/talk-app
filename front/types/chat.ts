@@ -13,12 +13,21 @@ export type ChatMessage = {
   senderId: string;
   content: string;
   createdAt: string;
+  deletedForEveryone?: boolean;
+  deletedAt?: string | null;
+  deliveredBy?: string[];
+  readBy?: string[];
 };
 
 export type ContactItem = {
   conversationId: string;
   user: ChatUser;
   lastMessage: ChatMessage | null;
+  unreadCount?: number;
+  muted?: boolean;
+  blockedByMe?: boolean;
+  blockedMe?: boolean;
+  blocked?: boolean;
 };
 
 export type Conversation = {
@@ -26,4 +35,9 @@ export type Conversation = {
   type: "direct";
   participants: ChatUser[];
   lastMessage: ChatMessage | null;
+  muted?: boolean;
+  unreadCount?: number;
+  blockedByMe?: boolean;
+  blockedMe?: boolean;
+  blocked?: boolean;
 };

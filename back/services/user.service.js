@@ -1,23 +1,12 @@
+const mongoose = require("mongoose");
 const User = require("../models/User.model");
 const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
+const { isUserBlocked } = require("./block.service");
+const { toPublicUser, normalizeNickname } = require("../utils/user.util");
 
-function normalizeNickname(raw) {
-  return String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-}
-
-function toPublicUser(userDoc) {
-  return {
-    id: userDoc._id.toString(),
-    email: userDoc.email,
-    name: userDoc.name || "",
-    nickname: userDoc.nickname || "",
-    status: userDoc.status || "Disponible",
-    avatarUrl: userDoc.avatarUrl || "",
-  };
+function isConversationMutedForUser(conversation, userId) {
+  return (conversation.mutedBy || []).some((id) => id.toString() === userId.toString());
 }
 
 async function updateProfile(userId, { nickname, status, avatarUrl }) {
@@ -83,6 +72,20 @@ async function listDirectoryUsers(currentUserId, query) {
   return users.map((u) => toPublicUser(u));
 }
 
+function normalizeLastMessagePreview(lastMessage) {
+  if (!lastMessage) return null;
+  const deleted = Boolean(lastMessage.deletedForEveryone);
+  return {
+    id: lastMessage._id.toString(),
+    content: deleted ? "" : lastMessage.content,
+    senderId: lastMessage.sender.toString(),
+    createdAt: lastMessage.createdAt,
+    deletedForEveryone: deleted,
+    deliveredBy: (lastMessage.deliveredBy || []).map((id) => id.toString()),
+    readBy: (lastMessage.readBy || []).map((id) => id.toString()),
+  };
+}
+
 async function getContacts(currentUserId) {
   const conversations = await Conversation.find({
     type: "direct",
@@ -99,21 +102,31 @@ async function getContacts(currentUserId) {
       );
       if (!contact) return null;
 
+      const contactId = contact._id.toString();
+      const blockedByMe = await isUserBlocked(currentUserId, contactId);
+      const blockedMe = await isUserBlocked(contactId, currentUserId);
+
       const lastMessage = await Message.findOne({ conversationId: conversation._id })
         .sort({ createdAt: -1 })
         .lean();
 
+      const readerOid = new mongoose.Types.ObjectId(currentUserId);
+      const unreadCount = await Message.countDocuments({
+        conversationId: conversation._id,
+        sender: { $ne: currentUserId },
+        readBy: { $ne: readerOid },
+        deletedForEveryone: { $ne: true },
+      });
+
       return {
         conversationId: conversation._id.toString(),
         user: toPublicUser(contact),
-        lastMessage: lastMessage
-          ? {
-              id: lastMessage._id.toString(),
-              content: lastMessage.content,
-              senderId: lastMessage.sender.toString(),
-              createdAt: lastMessage.createdAt,
-            }
-          : null,
+        lastMessage: normalizeLastMessagePreview(lastMessage),
+        muted: isConversationMutedForUser(conversation, currentUserId),
+        blockedByMe,
+        blockedMe,
+        blocked: blockedByMe || blockedMe,
+        unreadCount,
       };
     })
   );

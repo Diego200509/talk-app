@@ -1,15 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Ban,
+  Bell,
+  BellOff,
   Check,
+  CheckCheck,
   LogOut,
+  MoreVertical,
   Search,
   Settings,
+  Trash2,
   UserPen,
   Users,
   X,
 } from "lucide-react";
+import { getMessageStatus } from "@/lib/chat/message-status";
+import type { ChatMessage } from "@/types/chat";
 import { useRouter } from "next/navigation";
 import { logoutRequest } from "@/lib/api/auth";
 import { useAuthStore } from "@/stores/auth-store";
@@ -23,22 +31,23 @@ export function Avatar({
   user,
   className,
   fallbackClassName,
+  showOnline,
+  isOnline,
 }: {
   user: ChatUser | null | undefined;
   className?: string;
   fallbackClassName?: string;
+  showOnline?: boolean;
+  isOnline?: boolean;
 }) {
   const name = user ? sidebarTitle(user) : "Usuario";
-  if (user?.avatarUrl) {
-    return (
-      <img
-        src={user.avatarUrl}
-        alt={`Avatar de ${name}`}
-        className={cn("size-10 rounded-full object-cover", className)}
-      />
-    );
-  }
-  return (
+  const inner = user?.avatarUrl ? (
+    <img
+      src={user.avatarUrl}
+      alt={`Avatar de ${name}`}
+      className={cn("size-10 rounded-full object-cover", className)}
+    />
+  ) : (
     <div
       className={cn(
         "flex size-10 items-center justify-center rounded-full bg-violet-600 text-sm font-semibold text-white",
@@ -47,6 +56,225 @@ export function Avatar({
       aria-hidden
     >
       {avatarFallback(name)}
+    </div>
+  );
+
+  if (!showOnline) return inner;
+
+  return (
+    <div className="relative shrink-0">
+      {inner}
+      <span
+        className={cn(
+          "absolute bottom-0 right-0 size-3 rounded-full border-2 border-[#121217]",
+          isOnline ? "bg-emerald-500" : "bg-zinc-500"
+        )}
+        aria-label={isOnline ? "En línea" : "Desconectado"}
+      />
+    </div>
+  );
+}
+
+export function UnreadBadge({ count }: { count: number }) {
+  const label = count > 99 ? "99+" : String(count);
+  if (count <= 0) return null;
+  return (
+    <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+      {label}
+    </span>
+  );
+}
+
+export function MessageStatusChecks({
+  message,
+  currentUserId,
+  otherUserId,
+}: {
+  message: ChatMessage;
+  currentUserId: string | undefined;
+  otherUserId?: string;
+}) {
+  const status = getMessageStatus(message, currentUserId, otherUserId);
+  if (!status) return null;
+  if (status === "read") {
+    return <CheckCheck className="size-3.5 text-sky-300" aria-label="Leído" />;
+  }
+  if (status === "delivered") {
+    return <CheckCheck className="size-3.5 opacity-80" aria-label="Entregado" />;
+  }
+  return <Check className="size-3.5 opacity-80" aria-label="Enviado" />;
+}
+
+export function ChatMessageBubble({
+  message,
+  mine,
+  currentUserId,
+  otherUserId,
+  onDeleteForEveryone,
+}: {
+  message: ChatMessage;
+  mine: boolean;
+  currentUserId: string | undefined;
+  otherUserId?: string;
+  onDeleteForEveryone?: (messageId: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const deleted = Boolean(message.deletedForEveryone);
+
+  return (
+    <div
+      className={cn(
+        "group relative max-w-[88%]",
+        mine ? "self-end" : "self-start"
+      )}
+    >
+      <div
+        className={cn(
+          "overflow-hidden rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
+          mine
+            ? "rounded-tr-md border border-violet-400/40 bg-violet-700 text-white"
+            : "rounded-tl-md border border-white/10 bg-[#1a1a22] text-zinc-100",
+          deleted && "italic opacity-80"
+        )}
+      >
+        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          {deleted ? "Este mensaje fue eliminado" : message.content}
+        </p>
+        <div className={cn("mt-1 flex items-center justify-end gap-1", mine ? "text-violet-100/90" : "opacity-70")}>
+          <span className="text-[10px]">
+            {new Date(message.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          {mine ? (
+            <MessageStatusChecks
+              message={message}
+              currentUserId={currentUserId}
+              otherUserId={otherUserId}
+            />
+          ) : null}
+        </div>
+      </div>
+      {mine && !deleted && onDeleteForEveryone ? (
+        <div className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 transition group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="rounded-lg p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            aria-label="Opciones del mensaje"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+          {menuOpen ? (
+            <div className="absolute left-0 top-full z-10 mt-1 w-44 rounded-lg border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDeleteForEveryone(message.id);
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-rose-300 hover:bg-rose-500/10"
+              >
+                <Trash2 className="size-3.5" />
+                Eliminar para todos
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ConversationHeaderMenu({
+  muted,
+  blockedByMe,
+  blockedMe,
+  onMute,
+  onUnmute,
+  onBlock,
+  onUnblock,
+}: {
+  muted: boolean;
+  blockedByMe: boolean;
+  blockedMe: boolean;
+  onMute: () => void;
+  onUnmute: () => void;
+  onBlock: () => void;
+  onUnblock: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative ml-auto shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100"
+        aria-label="Opciones de conversación"
+      >
+        <MoreVertical className="size-4" />
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+          {muted ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onUnmute();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
+            >
+              <Bell className="size-4 text-zinc-400" />
+              Activar notificaciones
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onMute();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
+            >
+              <BellOff className="size-4 text-zinc-400" />
+              Silenciar chat
+            </button>
+          )}
+          {blockedByMe ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onUnblock();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
+            >
+              <Ban className="size-4 text-zinc-400" />
+              Desbloquear usuario
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onBlock();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
+            >
+              <Ban className="size-4" />
+              Bloquear usuario
+            </button>
+          )}
+        </div>
+      ) : null}
+      {(blockedByMe || blockedMe) && (
+        <p className="absolute -bottom-5 right-0 whitespace-nowrap text-[10px] text-amber-400/90">
+          {blockedMe ? "Te bloqueó" : "Usuario bloqueado"}
+        </p>
+      )}
     </div>
   );
 }
@@ -174,11 +402,13 @@ export function ContactsDirectoryPanel({
   searchTerm,
   onSearchTermChange,
   onOpenConversation,
+  isOnline,
 }: {
   users: ChatUser[];
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   onOpenConversation: (user: ChatUser) => void;
+  isOnline?: (userId: string) => boolean;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#121217]">
@@ -212,11 +442,19 @@ export function ContactsDirectoryPanel({
               className="flex w-full gap-3 border-b border-white/5 px-3 py-3 text-left transition-colors hover:bg-white/[0.04] sm:px-4"
             >
               <div className="shrink-0" aria-hidden>
-                <Avatar user={user} className="size-11" fallbackClassName="size-11 bg-zinc-600" />
+                <Avatar
+                  user={user}
+                  className="size-11"
+                  fallbackClassName="size-11 bg-zinc-600"
+                  showOnline
+                  isOnline={isOnline?.(user.id)}
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-zinc-100">{sidebarTitle(user)}</p>
-                <p className="truncate text-xs text-zinc-500">{user.email}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  {isOnline?.(user.id) ? "En línea" : user.email}
+                </p>
               </div>
             </button>
           </li>
@@ -337,25 +575,52 @@ export function ProfileEditorPanel({
 export function MessageComposer({
   disabled,
   onSend,
+  onTypingChange,
 }: {
   disabled: boolean;
   onSend: (value: string) => void;
+  onTypingChange?: (typing: boolean) => void;
 }) {
   const [value, setValue] = useState("");
+  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function notifyTyping(typing: boolean) {
+    onTypingChange?.(typing);
+  }
+
+  function handleChange(next: string) {
+    setValue(next);
+    if (disabled) return;
+    if (next.trim()) {
+      notifyTyping(true);
+      if (typingStopRef.current) clearTimeout(typingStopRef.current);
+      typingStopRef.current = setTimeout(() => notifyTyping(false), 1500);
+    } else {
+      notifyTyping(false);
+    }
+  }
 
   function submit() {
     const clean = value.trim();
     if (!clean || disabled) return;
+    notifyTyping(false);
+    if (typingStopRef.current) clearTimeout(typingStopRef.current);
     onSend(clean);
     setValue("");
   }
+
+  useEffect(() => {
+    return () => {
+      if (typingStopRef.current) clearTimeout(typingStopRef.current);
+    };
+  }, []);
 
   return (
     <div className="flex min-h-[52px] w-full flex-1 items-end gap-2 bg-[#14141c] p-2 md:min-h-[56px] md:p-2.5">
       <div className="flex min-h-[44px] w-full flex-1 items-end gap-2 rounded-2xl border border-white/10 bg-[#0B0B0F] px-3 py-1.5 ring-violet-500/20 focus-within:border-violet-500/40 focus-within:ring-1">
         <textarea
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -363,8 +628,9 @@ export function MessageComposer({
             }
           }}
           rows={1}
-          placeholder="Escribe un mensaje…"
-          className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+          placeholder={disabled ? "No puedes enviar mensajes" : "Escribe un mensaje…"}
+          disabled={disabled}
+          className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
           aria-label="Mensaje"
         />
         <button

@@ -20,6 +20,12 @@ const conversationSchema = new mongoose.Schema(
       default: Date.now,
       index: true,
     },
+    mutedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );
