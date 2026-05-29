@@ -24,6 +24,8 @@ import { SOCKET_EVENTS } from "@/lib/socket-events";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChatUser, ContactItem } from "@/types/chat";
 import { lastMessagePreviewText } from "@/lib/chat/message-status";
+import { toAuthUser } from "@/lib/auth/user-mapper";
+import { useConversations } from "@/hooks/useConversations";
 import {
   playNotificationSound,
   requestNotificationPermission,
@@ -38,16 +40,16 @@ import {
   sidebarTitle,
   upsertMessage,
 } from "./chat-shell.helpers";
+import { Message } from "@/components/chat/Message";
+import { MessageInput } from "@/components/chat/MessageInput";
 import {
   Avatar,
-  ChatMessageBubble,
   ChatUserStrip,
   ContactsDirectoryPanel,
   ConversationHeaderMenu,
   BlockedUnblockBar,
-  MessageComposer,
-  ProfileEditorPanel,
   MessageStatusChecks,
+  ProfileEditorPanel,
   TalkAppBrand,
   UnreadBadge,
 } from "./chat-shell.parts";
@@ -85,6 +87,13 @@ export function ChatShell() {
     activeUser && (isBlockedByMe(activeUser.id) || activeContact?.blockedByMe)
   );
   const conversationMuted = activeContact?.muted ?? false;
+
+  const { sendText, sendImage, sendDocument, sendVoice } = useConversations({
+    token,
+    conversationId: activeConversationId,
+    blockedByMe,
+    onError: setSocketError,
+  });
 
   const chatSearchTerm = searchTerm.trim().toLowerCase();
   const visibleList = contacts
@@ -202,7 +211,7 @@ export function ChatShell() {
 
       playNotificationSound();
       const senderName = contact?.user ? sidebarTitle(contact.user) : "Nuevo mensaje";
-      showDesktopNotification(senderName, message.content || "Nuevo mensaje", {
+      showDesktopNotification(senderName, lastMessagePreviewText(message), {
         conversationId: message.conversationId,
         messageId: message.id,
       });
@@ -273,7 +282,7 @@ export function ChatShell() {
   const onUserUpdated = useCallback(
     (user: ChatUser) => {
       if (!token) return;
-      setSession(token, user);
+      setSession(token, toAuthUser(user));
       setContacts((prev) =>
         prev.map((contact) =>
           contact.user.id === user.id ? { ...contact, user: { ...contact.user, ...user } } : contact
@@ -465,7 +474,6 @@ export function ChatShell() {
             muted: conversation.muted,
             unreadCount: conversation.unreadCount ?? 0,
             blockedByMe: conversation.blockedByMe,
-            blocked: conversation.blocked,
           };
           if (idx >= 0) {
             const next = [...prev];
@@ -504,9 +512,7 @@ export function ChatShell() {
   }
 
   async function sendMessage(content: string) {
-    if (!token || !activeConversationId || blockedByMe) return;
-    const socket = getSocket(token);
-    socket.emit(SOCKET_EVENTS.MESSAGE_SEND, { conversationId: activeConversationId, content });
+    sendText(content);
   }
 
   function handleTypingChange(typing: boolean) {
@@ -556,7 +562,7 @@ export function ChatShell() {
   async function saveProfile(payload: { nickname: string; status: string; avatar: File | null }) {
     if (!token || !authUser) return;
     const { user } = await updateProfileRequest(payload);
-    setSession(token, user);
+    setSession(token, toAuthUser(user));
     void refreshContacts();
   }
 
@@ -821,7 +827,7 @@ export function ChatShell() {
                     <p className="text-sm text-zinc-500">Aun no hay mensajes en esta conversación.</p>
                   ) : null}
                   {messages.map((message) => (
-                    <ChatMessageBubble
+                    <Message
                       key={message.id}
                       message={message}
                       mine={message.senderId === authUser?.id}
@@ -864,9 +870,12 @@ export function ChatShell() {
               {blockedByMe ? (
                 <BlockedUnblockBar onUnblock={() => void handleUnblock()} />
               ) : (
-                <MessageComposer
+                <MessageInput
                   disabled={!activeConversationId}
                   onSend={sendMessage}
+                  onSendImage={sendImage}
+                  onSendDocument={sendDocument}
+                  onSendVoice={sendVoice}
                   onTypingChange={handleTypingChange}
                 />
               )}

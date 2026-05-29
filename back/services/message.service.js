@@ -2,13 +2,80 @@ const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
 const { assertMessagingAllowed, normalizeMessage } = require("./conversation.service");
 
-async function createMessage({ conversationId, senderId, content }) {
-  const cleanContent = String(content || "").trim();
-  if (!cleanContent) {
-    const err = new Error("El mensaje no puede estar vacío");
-    err.code = "INVALID_MESSAGE";
-    throw err;
+const MESSAGE_TYPES = new Set(["text", "image", "document", "voice"]);
+
+function validateMessagePayload(payload) {
+  const type = MESSAGE_TYPES.has(payload.type) ? payload.type : "text";
+  const content = String(payload.content || "").trim();
+
+  if (type === "text") {
+    if (!content) {
+      const err = new Error("El mensaje no puede estar vacío");
+      err.code = "INVALID_MESSAGE";
+      throw err;
+    }
+    return { type, content };
   }
+
+  if (type === "image") {
+    if (!payload.imageUrl) {
+      const err = new Error("Falta la URL de la imagen");
+      err.code = "INVALID_MESSAGE";
+      throw err;
+    }
+    return {
+      type,
+      content,
+      imageUrl: payload.imageUrl,
+      fileName: payload.fileName || null,
+      mimeType: payload.mimeType || null,
+      fileSize: payload.fileSize ?? null,
+    };
+  }
+
+  if (type === "document") {
+    if (!payload.documentUrl) {
+      const err = new Error("Falta la URL del documento");
+      err.code = "INVALID_MESSAGE";
+      throw err;
+    }
+    return {
+      type,
+      content: content || payload.fileName || "Documento PDF",
+      documentUrl: payload.documentUrl,
+      fileName: payload.fileName || "documento.pdf",
+      mimeType: payload.mimeType || "application/pdf",
+      fileSize: payload.fileSize ?? null,
+    };
+  }
+
+  if (type === "voice") {
+    if (!payload.voiceUrl) {
+      const err = new Error("Falta la URL de la nota de voz");
+      err.code = "INVALID_MESSAGE";
+      throw err;
+    }
+    const duration =
+      payload.durationSeconds != null ? Number(payload.durationSeconds) : null;
+    return {
+      type,
+      content: content || "Nota de voz",
+      voiceUrl: payload.voiceUrl,
+      fileName: payload.fileName || "nota-de-voz.webm",
+      mimeType: payload.mimeType || "audio/webm",
+      fileSize: payload.fileSize ?? null,
+      durationSeconds: Number.isFinite(duration) && duration >= 0 ? duration : null,
+    };
+  }
+
+  const err = new Error("Tipo de mensaje no válido");
+  err.code = "INVALID_MESSAGE";
+  throw err;
+}
+
+async function createMessage(payload) {
+  const { conversationId, senderId } = payload;
+  const validated = validateMessagePayload(payload);
 
   const { conversation, otherParticipantId, receiverBlockedSender } =
     await assertMessagingAllowed(senderId, conversationId);
@@ -18,7 +85,7 @@ async function createMessage({ conversationId, senderId, content }) {
   const message = await Message.create({
     conversationId,
     sender: senderId,
-    content: cleanContent,
+    ...validated,
     deliveredBy: [],
     readBy: [],
     blockedFor,

@@ -144,13 +144,23 @@ function registerChatHandlers(io) {
       }
     });
 
-    socket.on(SOCKET_EVENTS.MESSAGE_SEND, async ({ conversationId, content }) => {
+    socket.on(SOCKET_EVENTS.MESSAGE_SEND, async (payload) => {
       try {
+        const { conversationId, content, type, imageUrl, documentUrl, voiceUrl, fileName, mimeType, fileSize, durationSeconds } =
+          payload || {};
         const { message, participantIds, otherParticipantId, hiddenFromReceiver } =
           await createMessage({
             conversationId,
             senderId: userId,
             content,
+            type,
+            imageUrl,
+            documentUrl,
+            voiceUrl,
+            fileName,
+            mimeType,
+            fileSize,
+            durationSeconds,
           });
 
         if (hiddenFromReceiver) {

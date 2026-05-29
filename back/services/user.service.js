@@ -78,7 +78,13 @@ function normalizeLastMessagePreview(lastMessage) {
   const deleted = Boolean(lastMessage.deletedForEveryone);
   return {
     id: lastMessage._id.toString(),
-    content: deleted ? "" : lastMessage.content,
+    conversationId: lastMessage.conversationId.toString(),
+    type: lastMessage.type || "text",
+    content: deleted ? "" : lastMessage.content || "",
+    imageUrl: deleted ? null : lastMessage.imageUrl || null,
+    documentUrl: deleted ? null : lastMessage.documentUrl || null,
+    voiceUrl: deleted ? null : lastMessage.voiceUrl || null,
+    fileName: deleted ? null : lastMessage.fileName || null,
     senderId: lastMessage.sender.toString(),
     createdAt: lastMessage.createdAt,
     deletedForEveryone: deleted,

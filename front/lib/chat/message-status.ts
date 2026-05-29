@@ -48,5 +48,16 @@ export function mergeMessageReceipt(existing: ChatMessage, incoming: ChatMessage
 export function lastMessagePreviewText(message: ChatMessage | null | undefined): string {
   if (!message) return "Sin mensajes todavía";
   if (message.deletedForEveryone) return "Este mensaje fue eliminado";
+
+  const type = message.type || "text";
+  if (type === "image") {
+    return message.content?.trim() ? `📷 ${message.content.trim()}` : "📷 Imagen";
+  }
+  if (type === "document") {
+    return `📄 ${message.fileName || message.content || "Documento PDF"}`;
+  }
+  if (type === "voice") {
+    return "🎤 Nota de voz";
+  }
   return message.content || "Sin mensajes todavía";
 }

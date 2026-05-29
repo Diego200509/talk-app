@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
   Bell,
@@ -11,7 +11,6 @@ import {
   MoreVertical,
   Search,
   Settings,
-  Trash2,
   UserPen,
   Users,
   X,
@@ -103,113 +102,6 @@ export function MessageStatusChecks({
     return <CheckCheck className="size-3.5 opacity-80" aria-label="Entregado" />;
   }
   return <Check className="size-3.5 opacity-80" aria-label="Enviado" />;
-}
-
-export function ChatMessageBubble({
-  message,
-  mine,
-  currentUserId,
-  otherUserId,
-  onDeleteForEveryone,
-}: {
-  message: ChatMessage;
-  mine: boolean;
-  currentUserId: string | undefined;
-  otherUserId?: string;
-  onDeleteForEveryone?: (messageId: string) => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const deleted = Boolean(message.deletedForEveryone);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    function closeOnOutside(event: MouseEvent) {
-      const target = event.target as HTMLElement | null;
-      if (!target?.closest("[data-message-menu-root]")) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [menuOpen]);
-
-  return (
-    <div
-      className={cn(
-        "group relative max-w-[88%]",
-        mine ? "self-end" : "self-start",
-        menuOpen && "z-50"
-      )}
-    >
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
-          mine
-            ? "rounded-tr-md border border-violet-400/40 bg-violet-700 text-white"
-            : "rounded-tl-md border border-white/10 bg-[#1a1a22] text-zinc-100",
-          deleted && "italic opacity-80"
-        )}
-      >
-        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          {deleted ? "Este mensaje fue eliminado" : message.content}
-        </p>
-        <div className={cn("mt-1 flex items-center justify-end gap-1", mine ? "text-violet-100/90" : "opacity-70")}>
-          <span className="text-[10px]">
-            {new Date(message.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          {mine ? (
-            <MessageStatusChecks
-              message={message}
-              currentUserId={currentUserId}
-              otherUserId={otherUserId}
-            />
-          ) : null}
-        </div>
-      </div>
-      {mine && !deleted && onDeleteForEveryone ? (
-        <div
-          data-message-menu-root
-          className={cn(
-            "absolute -left-9 top-2 z-20",
-            "opacity-0 transition-opacity group-hover:opacity-100",
-            menuOpen && "opacity-100"
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-            aria-label="Opciones del mensaje"
-            aria-expanded={menuOpen}
-          >
-            <MoreVertical className="size-4" />
-          </button>
-          {menuOpen ? (
-            <div
-              role="menu"
-              className="absolute left-0 top-full z-[100] mt-2 w-48 rounded-xl border border-white/15 bg-[#1c1c28] p-1.5 shadow-2xl ring-1 ring-black/40"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDeleteForEveryone(message.id);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-500/15"
-              >
-                <Trash2 className="size-4 shrink-0" />
-                Eliminar para todos
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export function BlockedUnblockBar({ onUnblock }: { onUnblock: () => void }) {
@@ -602,80 +494,6 @@ export function ProfileEditorPanel({
             Guardar
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-export function MessageComposer({
-  disabled,
-  onSend,
-  onTypingChange,
-}: {
-  disabled: boolean;
-  onSend: (value: string) => void;
-  onTypingChange?: (typing: boolean) => void;
-}) {
-  const [value, setValue] = useState("");
-  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function notifyTyping(typing: boolean) {
-    onTypingChange?.(typing);
-  }
-
-  function handleChange(next: string) {
-    setValue(next);
-    if (disabled) return;
-    if (next.trim()) {
-      notifyTyping(true);
-      if (typingStopRef.current) clearTimeout(typingStopRef.current);
-      typingStopRef.current = setTimeout(() => notifyTyping(false), 1500);
-    } else {
-      notifyTyping(false);
-    }
-  }
-
-  function submit() {
-    const clean = value.trim();
-    if (!clean || disabled) return;
-    notifyTyping(false);
-    if (typingStopRef.current) clearTimeout(typingStopRef.current);
-    onSend(clean);
-    setValue("");
-  }
-
-  useEffect(() => {
-    return () => {
-      if (typingStopRef.current) clearTimeout(typingStopRef.current);
-    };
-  }, []);
-
-  return (
-    <div className="flex min-h-[52px] w-full flex-1 items-end gap-2 bg-[#14141c] p-2 md:min-h-[56px] md:p-2.5">
-      <div className="flex min-h-[44px] w-full flex-1 items-end gap-2 rounded-2xl border border-white/10 bg-[#0B0B0F] px-3 py-1.5 ring-violet-500/20 focus-within:border-violet-500/40 focus-within:ring-1">
-        <textarea
-          value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={1}
-          placeholder={disabled ? "No puedes enviar mensajes" : "Escribe un mensaje…"}
-          disabled={disabled}
-          className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
-          aria-label="Mensaje"
-        />
-        <button
-          type="button"
-          disabled={disabled || !value.trim()}
-          onClick={submit}
-          className="mb-0.5 shrink-0 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
-        >
-          Enviar
-        </button>
       </div>
     </div>
   );

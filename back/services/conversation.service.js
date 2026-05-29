@@ -26,13 +26,22 @@ function visibleMessagesQuery(conversationId, viewerId) {
 
 function normalizeMessage(message) {
   if (!message) return null;
+  const deleted = Boolean(message.deletedForEveryone);
   return {
     id: message._id.toString(),
     conversationId: message.conversationId.toString(),
     senderId: message.sender.toString(),
-    content: message.deletedForEveryone ? "" : message.content,
+    type: message.type || "text",
+    content: deleted ? "" : message.content || "",
+    imageUrl: deleted ? null : message.imageUrl || null,
+    documentUrl: deleted ? null : message.documentUrl || null,
+    voiceUrl: deleted ? null : message.voiceUrl || null,
+    fileName: deleted ? null : message.fileName || null,
+    mimeType: deleted ? null : message.mimeType || null,
+    fileSize: deleted ? null : message.fileSize ?? null,
+    durationSeconds: deleted ? null : message.durationSeconds ?? null,
     createdAt: message.createdAt,
-    deletedForEveryone: Boolean(message.deletedForEveryone),
+    deletedForEveryone: deleted,
     deletedAt: message.deletedAt || null,
     deliveredBy: idsToStrings(message.deliveredBy),
     readBy: idsToStrings(message.readBy),
