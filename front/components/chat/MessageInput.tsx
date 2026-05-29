@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, ImageIcon, Mic, MicOff, Paperclip, Send, Square } from "lucide-react";
+import { FileText, ImageIcon, Mic, Plus, Send, Square } from "lucide-react";
 import { formatDuration } from "@/lib/media-url";
 import { normalizeMimeType } from "@/lib/media-validation";
 import { cn } from "@/lib/utils";
@@ -15,30 +15,83 @@ type Props = {
   onTypingChange?: (typing: boolean) => void;
 };
 
-function MediaRecorderControl({
+export function MessageInput({
   disabled,
-  onRecorded,
-}: {
-  disabled: boolean;
-  onRecorded: (file: File, durationSeconds: number | null) => Promise<void>;
-}) {
+  onSend,
+  onSendImage,
+  onSendDocument,
+  onSendVoice,
+  onTypingChange,
+}: Props) {
+  const [value, setValue] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [uploading, setUploading] = useState(false);
+
+  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
+  const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef(0);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      mediaRecorderRef.current?.stop();
-    };
-  }, []);
+  const hasText = value.trim().length > 0;
+  const showSend = hasText && !recording;
+
+  function notifyTyping(typing: boolean) {
+    onTypingChange?.(typing);
+  }
+
+  function handleChange(next: string) {
+    setValue(next);
+    if (disabled) return;
+    if (next.trim()) {
+      notifyTyping(true);
+      if (typingStopRef.current) clearTimeout(typingStopRef.current);
+      typingStopRef.current = setTimeout(() => notifyTyping(false), 1500);
+    } else {
+      notifyTyping(false);
+    }
+  }
+
+  function submit() {
+    const clean = value.trim();
+    if (!clean || disabled || uploading || recording) return;
+    notifyTyping(false);
+    if (typingStopRef.current) clearTimeout(typingStopRef.current);
+    onSend(clean);
+    setValue("");
+  }
+
+  async function handleImageChange(file: File | undefined) {
+    if (!file || disabled || uploading) return;
+    setAttachOpen(false);
+    setUploading(true);
+    try {
+      await onSendImage(file);
+    } finally {
+      setUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  async function handleDocumentChange(file: File | undefined) {
+    if (!file || disabled || uploading) return;
+    setAttachOpen(false);
+    setUploading(true);
+    try {
+      await onSendDocument(file);
+    } finally {
+      setUploading(false);
+      if (documentInputRef.current) documentInputRef.current.value = "";
+    }
+  }
 
   async function startRecording() {
-    if (disabled || uploading || recording) return;
+    if (disabled || uploading || recording || hasText) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const preferredTypes = [
@@ -54,9 +107,6 @@ function MediaRecorderControl({
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-      };
       mediaRecorderRef.current = recorder;
       startedAtRef.current = Date.now();
       setElapsed(0);
@@ -65,8 +115,9 @@ function MediaRecorderControl({
       }, 250);
       recorder.start();
       setRecording(true);
+      setAttachOpen(false);
     } catch {
-      /* permiso denegado o sin micrófono */
+      /* permiso denegado */
     }
   }
 
@@ -93,145 +144,101 @@ function MediaRecorderControl({
 
     const normalizedMime = normalizeMimeType(recorder.mimeType) || "audio/webm";
     const blob = new Blob(chunksRef.current, { type: normalizedMime });
+    chunksRef.current = [];
+    mediaRecorderRef.current = null;
+
     if (blob.size === 0) return;
 
     const ext = normalizedMime.includes("ogg") ? "ogg" : "webm";
-    const file = new File([blob], `nota-de-voz-${Date.now()}.${ext}`, {
-      type: normalizedMime,
-    });
+    const file = new File([blob], `nota-de-voz-${Date.now()}.${ext}`, { type: normalizedMime });
 
     setUploading(true);
     try {
-      await onRecorded(file, durationSeconds);
+      await onSendVoice(file, durationSeconds);
     } finally {
       setUploading(false);
-      chunksRef.current = [];
-      mediaRecorderRef.current = null;
     }
   }
 
-  if (recording) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-rose-300">{formatDuration(elapsed)}</span>
-        <button
-          type="button"
-          onClick={() => void stopRecording()}
-          className="inline-flex size-9 items-center justify-center rounded-xl border border-rose-400/40 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30"
-          aria-label="Detener grabación"
-        >
-          <Square className="size-4 fill-current" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={disabled || uploading}
-      onClick={() => void startRecording()}
-      className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 text-zinc-300 transition hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
-      aria-label="Grabar nota de voz"
-    >
-      {uploading ? <MicOff className="size-4 animate-pulse" /> : <Mic className="size-4" />}
-    </button>
-  );
-}
-
-export function MessageInput({
-  disabled,
-  onSend,
-  onSendImage,
-  onSendDocument,
-  onSendVoice,
-  onTypingChange,
-}: Props) {
-  const [value, setValue] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const documentInputRef = useRef<HTMLInputElement | null>(null);
-
-  function notifyTyping(typing: boolean) {
-    onTypingChange?.(typing);
-  }
-
-  function handleChange(next: string) {
-    setValue(next);
-    if (disabled) return;
-    if (next.trim()) {
-      notifyTyping(true);
-      if (typingStopRef.current) clearTimeout(typingStopRef.current);
-      typingStopRef.current = setTimeout(() => notifyTyping(false), 1500);
-    } else {
-      notifyTyping(false);
+  function handlePrimaryAction() {
+    if (showSend) {
+      submit();
+      return;
     }
-  }
-
-  function submit() {
-    const clean = value.trim();
-    if (!clean || disabled || uploading) return;
-    notifyTyping(false);
-    if (typingStopRef.current) clearTimeout(typingStopRef.current);
-    onSend(clean);
-    setValue("");
-  }
-
-  async function handleImageChange(file: File | undefined) {
-    if (!file || disabled || uploading) return;
-    setUploading(true);
-    try {
-      await onSendImage(file);
-    } finally {
-      setUploading(false);
-      if (imageInputRef.current) imageInputRef.current.value = "";
+    if (recording) {
+      void stopRecording();
+      return;
     }
+    void startRecording();
   }
 
-  async function handleDocumentChange(file: File | undefined) {
-    if (!file || disabled || uploading) return;
-    setUploading(true);
-    try {
-      await onSendDocument(file);
-    } finally {
-      setUploading(false);
-      if (documentInputRef.current) documentInputRef.current.value = "";
+  useEffect(() => {
+    if (!attachOpen) return;
+    function closeOnOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-attach-menu-root]")) {
+        setAttachOpen(false);
+      }
     }
-  }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [attachOpen]);
 
   useEffect(() => {
     return () => {
       if (typingStopRef.current) clearTimeout(typingStopRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+      mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+      mediaRecorderRef.current?.stop();
     };
   }, []);
 
   return (
     <div className="flex min-h-[52px] w-full flex-1 items-end gap-2 bg-[#14141c] p-2 md:min-h-[56px] md:p-2.5">
       <div className="flex min-h-[44px] w-full flex-1 items-end gap-2 rounded-2xl border border-white/10 bg-[#0B0B0F] px-2 py-1.5 ring-violet-500/20 focus-within:border-violet-500/40 focus-within:ring-1 md:px-3">
-        <div className="mb-0.5 flex shrink-0 items-center gap-1">
+        {/* Menú adjuntos (+) */}
+        <div className="relative mb-0.5 shrink-0" data-attach-menu-root>
           <button
             type="button"
-            disabled={disabled || uploading}
-            onClick={() => imageInputRef.current?.click()}
-            className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 text-zinc-300 transition hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
-            aria-label="Enviar imagen"
+            disabled={disabled || uploading || recording}
+            onClick={() => setAttachOpen((v) => !v)}
+            className={cn(
+              "inline-flex size-9 items-center justify-center rounded-full border border-white/10 text-zinc-300 transition",
+              "hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-200",
+              attachOpen && "border-violet-500/40 bg-violet-500/15 text-violet-200",
+              "disabled:opacity-50"
+            )}
+            aria-label="Adjuntar archivo"
+            aria-expanded={attachOpen}
           >
-            <ImageIcon className="size-4" />
+            <Plus className={cn("size-5 transition-transform", attachOpen && "rotate-45")} />
           </button>
-          <button
-            type="button"
-            disabled={disabled || uploading}
-            onClick={() => documentInputRef.current?.click()}
-            className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 text-zinc-300 transition hover:border-violet-500/40 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
-            aria-label="Enviar documento PDF"
-          >
-            <FileText className="size-4" />
-          </button>
-          <MediaRecorderControl
-            disabled={disabled || uploading}
-            onRecorded={onSendVoice}
-          />
+
+          {attachOpen ? (
+            <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+              >
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-violet-500/20 text-violet-300">
+                  <ImageIcon className="size-4" />
+                </span>
+                Foto
+              </button>
+              <button
+                type="button"
+                onClick={() => documentInputRef.current?.click()}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+              >
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-sky-500/20 text-sky-300">
+                  <FileText className="size-4" />
+                </span>
+                Documento
+              </button>
+            </div>
+          ) : null}
+
           <input
             ref={imageInputRef}
             type="file"
@@ -248,41 +255,67 @@ export function MessageInput({
           />
         </div>
 
-        <textarea
-          value={value}
-          onChange={(e) => handleChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
+        {/* Campo de texto o indicador de grabación */}
+        {recording ? (
+          <div className="flex min-h-[36px] flex-1 items-center gap-3 py-2">
+            <span className="relative flex size-2.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-rose-400 opacity-60" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-rose-500" />
+            </span>
+            <span className="text-sm font-medium text-rose-200">{formatDuration(elapsed)}</span>
+            <span className="text-xs text-zinc-500">Grabando nota de voz…</span>
+          </div>
+        ) : (
+          <textarea
+            value={value}
+            onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (hasText) submit();
+              }
+            }}
+            rows={1}
+            placeholder={
+              disabled
+                ? "No puedes enviar mensajes"
+                : uploading
+                  ? "Subiendo archivo…"
+                  : "Escribe un mensaje…"
             }
-          }}
-          rows={1}
-          placeholder={
-            disabled
-              ? "No puedes enviar mensajes"
-              : uploading
-                ? "Subiendo archivo…"
-                : "Escribe un mensaje…"
-          }
-          disabled={disabled || uploading}
-          className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
-          aria-label="Mensaje"
-        />
+            disabled={disabled || uploading}
+            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
+            aria-label="Mensaje"
+          />
+        )}
+
+        {/* Enviar texto / micrófono / detener grabación */}
         <button
           type="button"
-          disabled={disabled || uploading || !value.trim()}
-          onClick={submit}
+          disabled={disabled || uploading || (!showSend && !recording && hasText)}
+          onClick={handlePrimaryAction}
           className={cn(
-            "mb-0.5 inline-flex shrink-0 items-center gap-1 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
+            "mb-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-full transition",
+            recording
+              ? "bg-rose-500/90 text-white hover:bg-rose-500"
+              : "bg-violet-600 text-white hover:bg-violet-500",
+            "disabled:opacity-50"
           )}
+          aria-label={
+            recording ? "Detener y enviar nota de voz" : showSend ? "Enviar mensaje" : "Grabar nota de voz"
+          }
         >
-          {uploading ? <Paperclip className="size-3.5 animate-pulse" /> : <Send className="size-3.5" />}
-          Enviar
+          {uploading ? (
+            <span className="size-4 animate-pulse rounded-full bg-white/80" />
+          ) : recording ? (
+            <Square className="size-4 fill-current" />
+          ) : showSend ? (
+            <Send className="size-4" />
+          ) : (
+            <Mic className="size-4" />
+          )}
         </button>
       </div>
     </div>
   );
 }
-
-export { MediaRecorderControl };

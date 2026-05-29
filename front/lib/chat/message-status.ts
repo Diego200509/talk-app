@@ -51,13 +51,13 @@ export function lastMessagePreviewText(message: ChatMessage | null | undefined):
 
   const type = message.type || "text";
   if (type === "image") {
-    return message.content?.trim() ? `📷 ${message.content.trim()}` : "📷 Imagen";
+    return message.content?.trim() ? `${message.content.trim()}` : "Imagen";
   }
   if (type === "document") {
-    return `📄 ${message.fileName || message.content || "Documento PDF"}`;
+    return `${message.fileName || message.content || "Documento PDF"}`;
   }
   if (type === "voice") {
-    return "🎤 Nota de voz";
+    return "Nota de voz";
   }
   return message.content || "Sin mensajes todavía";
 }
