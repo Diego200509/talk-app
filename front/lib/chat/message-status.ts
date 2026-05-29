@@ -57,7 +57,7 @@ export function lastMessagePreviewText(message: ChatMessage | null | undefined):
     return `${message.fileName || message.content || "Documento PDF"}`;
   }
   if (type === "voice") {
-    return "Nota de voz";
+    return message.fileName || message.content || "Nota de voz";
   }
   return message.content || "Sin mensajes todavía";
 }

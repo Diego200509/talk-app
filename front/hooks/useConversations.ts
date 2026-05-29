@@ -94,7 +94,7 @@ export function useConversations({
         const uploaded = await uploadVoice(file);
         emitMessage({
           type: "voice",
-          content: "Nota de voz",
+          content: file.name || uploaded.fileName || "Audio",
           voiceUrl: uploaded.url,
           fileName: uploaded.fileName,
           mimeType: uploaded.mimeType,
@@ -102,7 +102,7 @@ export function useConversations({
           durationSeconds: duration ?? undefined,
         });
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : "No se pudo enviar la nota de voz");
+        onError?.(err instanceof Error ? err.message : "No se pudo enviar el audio");
       }
     },
     [emitMessage, onError]

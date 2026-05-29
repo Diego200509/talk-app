@@ -21,13 +21,15 @@ export function normalizeMimeType(mime?: string | null): string {
   return (mime || "").split(";")[0].trim().toLowerCase();
 }
 
-const AUDIO_EXTENSIONS = /\.(webm|ogg|mp3|mp4|m4a|wav)$/i;
+const AUDIO_EXTENSIONS =
+  /\.(webm|ogg|oga|opus|mp3|mp2|mp1|mp4|m4a|m4b|aac|wav|wave|flac|aiff|aif|wma|mid|midi|amr|3gp)$/i;
 
-function isAllowedAudioFile(file: File): boolean {
+/** Acepta cualquier MIME `audio/*` o extensión de audio conocida. */
+export function isAllowedAudioFile(file: File): boolean {
   const base = normalizeMimeType(file.type);
+  if (base.startsWith("audio/")) return true;
   if (base && AUDIO_MIMES.has(base)) return true;
-  if (base.startsWith("audio/") && AUDIO_EXTENSIONS.test(file.name)) return true;
-  if (!base && AUDIO_EXTENSIONS.test(file.name)) return true;
+  if (AUDIO_EXTENSIONS.test(file.name)) return true;
   return false;
 }
 

@@ -36,13 +36,36 @@ function normalizeMimeType(mime) {
   return (mime || "").split(";")[0].trim().toLowerCase();
 }
 
+const AUDIO_EXTENSIONS = new Set([
+  ".webm",
+  ".ogg",
+  ".oga",
+  ".opus",
+  ".mp3",
+  ".mp2",
+  ".mp1",
+  ".mp4",
+  ".m4a",
+  ".m4b",
+  ".aac",
+  ".wav",
+  ".wave",
+  ".flac",
+  ".aiff",
+  ".aif",
+  ".wma",
+  ".mid",
+  ".midi",
+  ".amr",
+  ".3gp",
+]);
+
 function isAllowedAudioUpload(file) {
   const base = normalizeMimeType(file.mimetype);
+  if (base.startsWith("audio/")) return true;
   if (AUDIO_MIMES.has(base)) return true;
   const ext = path.extname(file.originalname || "").toLowerCase();
-  const allowedExt = [".webm", ".ogg", ".mp3", ".mp4", ".m4a", ".wav"];
-  if (base.startsWith("audio/") && allowedExt.includes(ext)) return true;
-  if (!base && allowedExt.includes(ext)) return true;
+  if (AUDIO_EXTENSIONS.has(ext)) return true;
   return false;
 }
 
@@ -62,7 +85,7 @@ function audioFileFilter(_req, file, cb) {
     cb(null, true);
     return;
   }
-  cb(new Error("Tipo no permitido. Solo audio (WEBM, OGG, MP3, MP4, WAV)."));
+  cb(new Error("Tipo no permitido. Solo archivos de audio."));
 }
 
 const imageUpload = multer({

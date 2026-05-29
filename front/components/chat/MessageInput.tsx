@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, ImageIcon, Mic, Plus, Send, Square } from "lucide-react";
+import { FileText, ImageIcon, Mic, Music2, Plus, Send, Square } from "lucide-react";
 import { formatDuration } from "@/lib/media-url";
 import { normalizeMimeType } from "@/lib/media-validation";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ export function MessageInput({
   const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const documentInputRef = useRef<HTMLInputElement | null>(null);
-  const attachMenuRef = useRef<HTMLDivElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -87,6 +87,18 @@ export function MessageInput({
     } finally {
       setUploading(false);
       if (documentInputRef.current) documentInputRef.current.value = "";
+    }
+  }
+
+  async function handleAudioChange(file: File | undefined) {
+    if (!file || disabled || uploading) return;
+    setAttachOpen(false);
+    setUploading(true);
+    try {
+      await onSendVoice(file, null);
+    } finally {
+      setUploading(false);
+      if (audioInputRef.current) audioInputRef.current.value = "";
     }
   }
 
@@ -236,6 +248,16 @@ export function MessageInput({
                 </span>
                 Documento
               </button>
+              <button
+                type="button"
+                onClick={() => audioInputRef.current?.click()}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+              >
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                  <Music2 className="size-4" />
+                </span>
+                Audio
+              </button>
             </div>
           ) : null}
 
@@ -252,6 +274,13 @@ export function MessageInput({
             accept="application/pdf"
             className="hidden"
             onChange={(e) => void handleDocumentChange(e.target.files?.[0])}
+          />
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac,.opus,.wma,.aiff,.amr,.3gp"
+            className="hidden"
+            onChange={(e) => void handleAudioChange(e.target.files?.[0])}
           />
         </div>
 
