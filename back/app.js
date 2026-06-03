@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const { createCorsOrigin } = require("./utils/cors.util");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
 const conversationRoutes = require("./routes/conversation.routes");
@@ -9,8 +10,7 @@ const uploadRoutes = require("./routes/upload.routes");
 
 function createApp() {
   const app = express();
-  const clientUrl = process.env.CLIENT_URL;
-  const corsOrigin = clientUrl || true;
+  const corsOrigin = createCorsOrigin();
 
   app.use(cors({ origin: corsOrigin, credentials: true }));
   app.use(express.json({ limit: "1mb" }));

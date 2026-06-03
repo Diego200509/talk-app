@@ -1,11 +1,9 @@
 import axios, { type AxiosError } from "axios";
 import { useAuthStore } from "@/stores/auth-store";
+import { getApiBaseUrl } from "@/lib/api-origin";
 import { disconnectSocket } from "@/lib/socket";
 
-const baseURL = `${process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:5001"}/api`;
-
 export const apiClient = axios.create({
-  baseURL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -28,6 +26,7 @@ function redirectToLogin() {
 let handlingUnauthorized = false;
 
 apiClient.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

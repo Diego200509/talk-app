@@ -1,5 +1,6 @@
 const Conversation = require("../models/Conversation.model");
 const Message = require("../models/Message.model");
+const { extractFirstUrl, fetchLinkPreview } = require("../lib/linkPreview");
 const { assertMessagingAllowed, normalizeMessage } = require("./conversation.service");
 
 const MESSAGE_TYPES = new Set(["text", "image", "document", "voice"]);
@@ -77,15 +78,30 @@ async function createMessage(payload) {
   const { conversationId, senderId } = payload;
   const validated = validateMessagePayload(payload);
 
-  const { conversation, otherParticipantId, receiverBlockedSender } =
+  const { conversation, otherParticipantId, receiverBlockedSender, isGroup } =
     await assertMessagingAllowed(senderId, conversationId);
 
-  const blockedFor = receiverBlockedSender ? [otherParticipantId] : [];
+  const blockedFor =
+    !isGroup && receiverBlockedSender ? [otherParticipantId] : [];
+
+  let linkPreview = null;
+  let messageType = validated.type;
+  if (validated.type === "text") {
+    const url = extractFirstUrl(validated.content);
+    if (url) {
+      linkPreview = await fetchLinkPreview(url);
+      if (linkPreview) {
+        messageType = "linkPreview";
+      }
+    }
+  }
 
   const message = await Message.create({
     conversationId,
     sender: senderId,
     ...validated,
+    type: messageType,
+    linkPreview,
     deliveredBy: [],
     readBy: [],
     blockedFor,
@@ -100,7 +116,9 @@ async function createMessage(payload) {
     message: normalizeMessage(message),
     participantIds: conversation.participants.map((id) => id.toString()),
     otherParticipantId,
-    hiddenFromReceiver: receiverBlockedSender,
+    hiddenFromReceiver: !isGroup && receiverBlockedSender,
+    isGroup: Boolean(isGroup),
+    conversationType: conversation.type,
   };
 }
 

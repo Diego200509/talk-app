@@ -21,4 +21,21 @@ export const SOCKET_EVENTS = {
   CONVERSATION_UNMUTED: "conversation:unmuted",
   USER_BLOCKED: "user:blocked",
   USER_UNBLOCKED: "user:unblocked",
+
+  GROUP_CREATED: "group:created",
+  GROUP_UPDATED: "group:updated",
+  GROUP_MEMBER_ADDED: "group:member_added",
+  GROUP_MEMBER_REMOVED: "group:member_removed",
+  GROUP_LEFT: "group:left",
+  GROUP_ADMIN_ADDED: "group:admin_added",
+  GROUP_ADMIN_REMOVED: "group:admin_removed",
+
+  CALL_OFFER: "call:offer",
+  CALL_ANSWER: "call:answer",
+  CALL_ICE_CANDIDATE: "call:ice-candidate",
+  CALL_INCOMING: "call:incoming",
+  CALL_ACCEPTED: "call:accepted",
+  CALL_REJECTED: "call:rejected",
+  CALL_ENDED: "call:ended",
+  CALL_BUSY: "call:busy",
 } as const;

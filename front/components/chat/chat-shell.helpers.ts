@@ -55,7 +55,46 @@ export function sidebarTitle(user: ChatUser) {
   return user.nickname || user.name || user.email;
 }
 
-export type LeftPanelMode = "chats" | "profile" | "contacts";
+export type LeftPanelMode = "chats" | "profile" | "contacts" | "create-group" | "manage-group";
+
+export const TALK_MENU_PANEL =
+  "rounded-xl border border-[var(--talk-border)] bg-[var(--talk-popover-bg)] p-1 shadow-[var(--talk-popover-shadow)]";
+
+export const TALK_MENU_ITEM =
+  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--talk-popover-text)] transition hover:bg-[var(--talk-popover-hover)]";
+
+export const TALK_MENU_ITEM_DANGER =
+  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-300";
+
+export const TALK_MENU_ICON = "size-4 shrink-0 text-[var(--talk-muted)]";
+
+export const TALK_SIDEBAR_PANEL = "flex min-h-0 flex-1 flex-col bg-[var(--talk-sidebar-bg)]";
+
+export const TALK_FIELD_LABEL =
+  "text-xs font-semibold uppercase tracking-wide text-[var(--talk-muted)]";
+
+export const TALK_INPUT =
+  "h-10 w-full rounded-md border border-[var(--talk-border)] bg-[var(--talk-input-bg)] px-2.5 text-sm text-[var(--talk-text)] outline-none placeholder:text-[var(--talk-muted)] focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/25";
+
+export const TALK_PROFILE_CARD =
+  "mb-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--talk-border)] bg-[var(--talk-profile-card-bg)] py-4 shadow-sm";
+
+export const TALK_BTN_SECONDARY =
+  "inline-flex h-9 items-center gap-1 rounded-md border border-[var(--talk-border)] bg-[var(--talk-hover)] px-3 text-sm text-[var(--talk-text)] transition hover:bg-violet-500/10";
+
+export const TALK_BTN_FILE =
+  "inline-flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-[var(--talk-border)] bg-[var(--talk-hover)] px-2 text-sm text-[var(--talk-text)] transition hover:bg-violet-500/10";
+
+export const TALK_PANEL_HEADER =
+  "flex items-center gap-2 border-b border-[var(--talk-border)] px-4 py-3";
+
+export const TALK_PANEL_HEADER_ROW =
+  "flex items-center justify-between border-b border-[var(--talk-border)] px-4 py-3";
+
+export const TALK_PANEL_TITLE = "text-sm font-semibold text-[var(--talk-text)]";
+
+export const TALK_SEARCH_BOX =
+  "mt-1 flex items-center gap-2 rounded-xl border border-[var(--talk-border)] bg-[var(--talk-search-bg)] px-2";
 
 export function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const map = new Map(existing.map((m) => [m.id, m]));

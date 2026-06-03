@@ -1,4 +1,12 @@
-export type MessageType = "text" | "image" | "document" | "voice";
+export type MessageType = "text" | "image" | "document" | "voice" | "system" | "linkPreview";
+
+export type LinkPreview = {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  image?: string | null;
+  domain?: string | null;
+};
 
 export type ChatMessage = {
   id: string;
@@ -6,6 +14,8 @@ export type ChatMessage = {
   senderId: string;
   type?: MessageType;
   content: string;
+  systemText?: string | null;
+  linkPreview?: LinkPreview | null;
   imageUrl?: string | null;
   documentUrl?: string | null;
   voiceUrl?: string | null;
@@ -30,18 +40,44 @@ export type ChatUser = {
   avatarUrl?: string | null;
 };
 
+export type ConversationType = "direct" | "group";
+
 export type ContactItem = {
   conversationId: string;
-  user: ChatUser;
+  type?: ConversationType;
+  user?: ChatUser;
+  name?: string;
+  description?: string;
+  avatarUrl?: string | null;
+  memberCount?: number;
+  adminIds?: string[];
+  isAdmin?: boolean;
   lastMessage?: ChatMessage | null;
   unreadCount?: number;
   muted?: boolean;
   blockedByMe?: boolean;
 };
 
+export type GroupConversation = {
+  id: string;
+  type: "group";
+  name: string;
+  description?: string;
+  avatarUrl?: string | null;
+  participants: ChatUser[];
+  participantIds: string[];
+  adminIds: string[];
+  createdBy?: string | null;
+  memberCount?: number;
+  isAdmin?: boolean;
+  muted?: boolean;
+  unreadCount?: number;
+  lastMessage?: ChatMessage | null;
+};
+
 export type Conversation = {
   id: string;
-  type?: string;
+  type?: ConversationType;
   participants?: ChatUser[];
   participantIds?: string[];
   lastMessage?: ChatMessage | null;
@@ -49,6 +85,12 @@ export type Conversation = {
   unreadCount?: number;
   blockedByMe?: boolean;
   blocked?: boolean;
+  name?: string;
+  description?: string;
+  avatarUrl?: string | null;
+  adminIds?: string[];
+  isAdmin?: boolean;
+  memberCount?: number;
 };
 
 export type UploadedMedia = {

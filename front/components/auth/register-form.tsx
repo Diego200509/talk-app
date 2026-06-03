@@ -6,6 +6,19 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import {
+  AUTH_CARD,
+  AUTH_ERROR,
+  AUTH_FOOTER,
+  AUTH_INPUT,
+  AUTH_INPUT_ICON,
+  AUTH_LABEL,
+  AUTH_LINK,
+  AUTH_SUBMIT_BTN,
+  AUTH_SUBTITLE,
+  AUTH_TITLE,
+  AUTH_TOGGLE_PASS,
+} from "@/components/auth/auth-form.styles";
 import { registerSchema } from "@/lib/auth/schemas";
 import { registerRequest } from "@/lib/api/auth";
 import { useAuthStore } from "@/stores/auth-store";
@@ -44,65 +57,54 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#121217] p-8 shadow-[0_0_48px_rgba(147,51,234,0.18)] sm:p-10">
+    <div className={AUTH_CARD}>
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold tracking-tight">Crea tu cuenta</h2>
-        <p className="mt-2 text-sm text-zinc-400">Únete a TalkApp en segundos</p>
+        <h2 className={AUTH_TITLE}>Crea tu cuenta</h2>
+        <p className={AUTH_SUBTITLE}>Únete a TalkApp en segundos</p>
       </div>
 
       <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div>
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Nombre
-          </label>
+          <label className={AUTH_LABEL}>Nombre</label>
           <div className="relative">
-            <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <User className={AUTH_INPUT_ICON} />
             <input
               type="text"
               autoComplete="name"
               placeholder="Tu nombre"
-              className={cn(
-                "h-12 w-full rounded-xl border border-white/10 bg-[#1a1a22] pl-10 pr-3 text-sm text-white outline-none ring-violet-500/40 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-2",
-                errors.name && "border-red-500/50 ring-red-500/30"
-              )}
+              className={cn(AUTH_INPUT, "pl-10 pr-3", errors.name && "border-red-500/50 ring-red-500/30")}
               {...register("name")}
             />
           </div>
-          {errors.name && <p className="mt-1.5 text-xs text-red-400">{errors.name.message}</p>}
+          {errors.name && <p className="mt-1.5 text-xs text-red-500">{errors.name.message}</p>}
         </div>
 
         <div>
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Correo electrónico
-          </label>
+          <label className={AUTH_LABEL}>Correo electrónico</label>
           <div className="relative">
-            <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <Mail className={AUTH_INPUT_ICON} />
             <input
               type="email"
               autoComplete="email"
               placeholder="nombre@ejemplo.com"
-              className={cn(
-                "h-12 w-full rounded-xl border border-white/10 bg-[#1a1a22] pl-10 pr-3 text-sm text-white outline-none ring-violet-500/40 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-2",
-                errors.email && "border-red-500/50 ring-red-500/30"
-              )}
+              className={cn(AUTH_INPUT, "pl-10 pr-3", errors.email && "border-red-500/50 ring-red-500/30")}
               {...register("email")}
             />
           </div>
-          {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
+          {errors.email && <p className="mt-1.5 text-xs text-red-500">{errors.email.message}</p>}
         </div>
 
         <div>
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Contraseña
-          </label>
+          <label className={AUTH_LABEL}>Contraseña</label>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <Lock className={AUTH_INPUT_ICON} />
             <input
               type={showPass ? "text" : "password"}
               autoComplete="new-password"
               placeholder="Mínimo 8 caracteres"
               className={cn(
-                "h-12 w-full rounded-xl border border-white/10 bg-[#1a1a22] pl-10 pr-11 text-sm text-white outline-none ring-violet-500/40 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-2",
+                AUTH_INPUT,
+                "pl-10 pr-11",
                 errors.password && "border-red-500/50 ring-red-500/30"
               )}
               {...register("password")}
@@ -110,53 +112,44 @@ export function RegisterForm() {
             <button
               type="button"
               onClick={() => setShowPass((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+              className={AUTH_TOGGLE_PASS}
               aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
             >
               {showPass ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>
+            <p className="mt-1.5 text-xs text-red-500">{errors.password.message}</p>
           )}
         </div>
 
         <div>
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Confirmar contraseña
-          </label>
+          <label className={AUTH_LABEL}>Confirmar contraseña</label>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <Lock className={AUTH_INPUT_ICON} />
             <input
               type={showPass ? "text" : "password"}
               autoComplete="new-password"
               placeholder="Repite la contraseña"
               className={cn(
-                "h-12 w-full rounded-xl border border-white/10 bg-[#1a1a22] pl-10 pr-3 text-sm text-white outline-none ring-violet-500/40 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-2",
+                AUTH_INPUT,
+                "pl-10 pr-3",
                 errors.confirm && "border-red-500/50 ring-red-500/30"
               )}
               {...register("confirm")}
             />
           </div>
           {errors.confirm && (
-            <p className="mt-1.5 text-xs text-red-400">{errors.confirm.message}</p>
+            <p className="mt-1.5 text-xs text-red-500">{errors.confirm.message}</p>
           )}
         </div>
 
-        {apiError && (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-            {apiError}
-          </p>
-        )}
+        {apiError ? <p className={AUTH_ERROR}>{apiError}</p> : null}
 
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className={cn(
-            "h-12 w-full rounded-xl border-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-base font-semibold text-white shadow-lg shadow-violet-900/40 hover:from-violet-500 hover:to-fuchsia-500"
-          )}
-        >
-          {isSubmitting ? "Creando cuenta…" : (
+        <Button type="submit" disabled={isSubmitting} className={cn(AUTH_SUBMIT_BTN)}>
+          {isSubmitting ? (
+            "Creando cuenta…"
+          ) : (
             <span className="inline-flex items-center gap-2">
               Registrarme
               <ArrowRight className="size-4" />
@@ -165,9 +158,9 @@ export function RegisterForm() {
         </Button>
       </form>
 
-      <p className="mt-8 text-center text-sm text-zinc-400">
+      <p className={AUTH_FOOTER}>
         ¿Ya tienes cuenta?{" "}
-        <Link href="/login" className="font-medium text-violet-400 hover:text-violet-300">
+        <Link href="/login" className={AUTH_LINK}>
           Inicia sesión
         </Link>
       </p>

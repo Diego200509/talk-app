@@ -76,11 +76,13 @@ async function listDirectoryUsers(currentUserId, query) {
 function normalizeLastMessagePreview(lastMessage) {
   if (!lastMessage) return null;
   const deleted = Boolean(lastMessage.deletedForEveryone);
+  const type = lastMessage.type || "text";
   return {
     id: lastMessage._id.toString(),
     conversationId: lastMessage.conversationId.toString(),
-    type: lastMessage.type || "text",
+    type,
     content: deleted ? "" : lastMessage.content || "",
+    systemText: deleted ? null : lastMessage.systemText || null,
     imageUrl: deleted ? null : lastMessage.imageUrl || null,
     documentUrl: deleted ? null : lastMessage.documentUrl || null,
     voiceUrl: deleted ? null : lastMessage.voiceUrl || null,
@@ -95,7 +97,6 @@ function normalizeLastMessagePreview(lastMessage) {
 
 async function getContacts(currentUserId) {
   const conversations = await Conversation.find({
-    type: "direct",
     participants: currentUserId,
   })
     .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -104,6 +105,30 @@ async function getContacts(currentUserId) {
 
   const items = await Promise.all(
     conversations.map(async (conversation) => {
+      const lastMessage = await getLastVisibleMessage(conversation._id, currentUserId);
+      const unreadCount = await getUnreadCount(conversation._id, currentUserId);
+      const muted = isConversationMutedForUser(conversation, currentUserId);
+      const sortAt = lastMessage?.createdAt || conversation.lastMessageAt || conversation.updatedAt;
+
+      if (conversation.type === "group") {
+        return {
+          conversationId: conversation._id.toString(),
+          type: "group",
+          name: conversation.name,
+          description: conversation.description || "",
+          avatarUrl: conversation.avatarUrl || null,
+          memberCount: conversation.participants.length,
+          adminIds: (conversation.adminIds || []).map((id) => id.toString()),
+          isAdmin: (conversation.adminIds || []).some(
+            (id) => id.toString() === currentUserId.toString()
+          ),
+          lastMessage: normalizeLastMessagePreview(lastMessage),
+          muted,
+          unreadCount,
+          sortAt,
+        };
+      }
+
       const contact = conversation.participants.find(
         (p) => p._id.toString() !== currentUserId.toString()
       );
@@ -112,18 +137,16 @@ async function getContacts(currentUserId) {
       const contactId = contact._id.toString();
       const blockedByMe = await isUserBlocked(currentUserId, contactId);
 
-      const lastMessage = await getLastVisibleMessage(conversation._id, currentUserId);
-      const unreadCount = await getUnreadCount(conversation._id, currentUserId);
-
       return {
         conversationId: conversation._id.toString(),
+        type: "direct",
         user: toPublicUser(contact),
         lastMessage: normalizeLastMessagePreview(lastMessage),
-        muted: isConversationMutedForUser(conversation, currentUserId),
+        muted,
         blockedByMe,
         blocked: blockedByMe,
         unreadCount,
-        sortAt: lastMessage?.createdAt || conversation.lastMessageAt || conversation.updatedAt,
+        sortAt,
       };
     })
   );

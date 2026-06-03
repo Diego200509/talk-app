@@ -15,6 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { ThemeToggleButton } from "@/components/theme/theme-toggle-button";
 import { getMessageStatus } from "@/lib/chat/message-status";
 import type { ChatMessage } from "@/types/chat";
 import { useRouter } from "next/navigation";
@@ -24,7 +25,8 @@ import { cn } from "@/lib/utils";
 import type { ChatUser } from "@/types/chat";
 import { SidebarPanelHeader } from "@/components/ui/sidebar-panel-header";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { HEADER_H, STATUS_OPTIONS, avatarFallback, sidebarTitle } from "./chat-shell.helpers";
+import { resolveMediaUrl } from "@/lib/media-url";
+import { HEADER_H, STATUS_OPTIONS, TALK_BTN_FILE, TALK_BTN_SECONDARY, TALK_FIELD_LABEL, TALK_INPUT, TALK_MENU_ICON, TALK_MENU_ITEM, TALK_MENU_ITEM_DANGER, TALK_MENU_PANEL, TALK_PROFILE_CARD, TALK_SEARCH_BOX, TALK_SIDEBAR_PANEL, avatarFallback, sidebarTitle } from "./chat-shell.helpers";
 
 export function Avatar({
   user,
@@ -40,19 +42,30 @@ export function Avatar({
   isOnline?: boolean;
 }) {
   const name = user ? sidebarTitle(user) : "Usuario";
-  const inner = user?.avatarUrl ? (
+  const avatarSrc = user?.avatarUrl ? resolveMediaUrl(user.avatarUrl) : "";
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarSrc]);
+
+  const showImage = Boolean(avatarSrc) && !imageFailed;
+
+  const inner = showImage ? (
     <img
-      src={user.avatarUrl}
-      alt={`Avatar de ${name}`}
+      src={avatarSrc}
+      alt=""
       className={cn("size-10 rounded-full object-cover", className)}
+      onError={() => setImageFailed(true)}
     />
   ) : (
     <div
       className={cn(
         "flex size-10 items-center justify-center rounded-full bg-violet-600 text-sm font-semibold text-white",
+        className,
         fallbackClassName
       )}
-      aria-hidden
+      aria-label={`Avatar de ${name}`}
     >
       {avatarFallback(name)}
     </div>
@@ -65,7 +78,7 @@ export function Avatar({
       {inner}
       <span
         className={cn(
-          "absolute bottom-0 right-0 size-3 rounded-full border-2 border-[#121217]",
+          "absolute bottom-0 right-0 size-3 rounded-full border-2 border-[var(--talk-panel-bg)]",
           isOnline ? "bg-emerald-500" : "bg-zinc-500"
         )}
         aria-label={isOnline ? "En línea" : "Desconectado"}
@@ -124,6 +137,7 @@ export function BlockedUnblockBar({ onUnblock }: { onUnblock: () => void }) {
 export function ConversationHeaderMenu({
   muted,
   blockedByMe,
+  allowBlock = true,
   onMute,
   onUnmute,
   onBlock,
@@ -131,6 +145,7 @@ export function ConversationHeaderMenu({
 }: {
   muted: boolean;
   blockedByMe: boolean;
+  allowBlock?: boolean;
   onMute: () => void;
   onUnmute: () => void;
   onBlock: () => void;
@@ -143,13 +158,13 @@ export function ConversationHeaderMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex size-9 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100"
+        className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--talk-border)] text-[var(--talk-muted)] hover:bg-[var(--talk-hover)] hover:text-[var(--talk-text)]"
         aria-label="Opciones de conversación"
       >
         <MoreVertical className="size-4" />
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+        <div className={cn("absolute right-0 top-full z-20 mt-1 w-52", TALK_MENU_PANEL)}>
           {muted ? (
             <button
               type="button"
@@ -157,9 +172,9 @@ export function ConversationHeaderMenu({
                 setOpen(false);
                 onUnmute();
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
+              className={TALK_MENU_ITEM}
             >
-              <Bell className="size-4 text-zinc-400" />
+              <Bell className={TALK_MENU_ICON} />
               Activar notificaciones
             </button>
           ) : (
@@ -169,37 +184,39 @@ export function ConversationHeaderMenu({
                 setOpen(false);
                 onMute();
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
+              className={TALK_MENU_ITEM}
             >
-              <BellOff className="size-4 text-zinc-400" />
+              <BellOff className={TALK_MENU_ICON} />
               Silenciar chat
             </button>
           )}
-          {blockedByMe ? (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onUnblock();
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 hover:bg-white/[0.06]"
-            >
-              <Ban className="size-4 text-zinc-400" />
-              Desbloquear usuario
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onBlock();
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
-            >
-              <Ban className="size-4" />
-              Bloquear usuario
-            </button>
-          )}
+          {allowBlock ? (
+            blockedByMe ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onUnblock();
+                }}
+                className={TALK_MENU_ITEM}
+              >
+                <Ban className={TALK_MENU_ICON} />
+                Desbloquear usuario
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onBlock();
+                }}
+                className={TALK_MENU_ITEM_DANGER}
+              >
+                <Ban className="size-4 shrink-0" />
+                Bloquear usuario
+              </button>
+            )
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -209,9 +226,11 @@ export function ConversationHeaderMenu({
 export function ChatUserStrip({
   onOpenProfile,
   onOpenContacts,
+  onOpenCreateGroup,
 }: {
   onOpenProfile: () => void;
   onOpenContacts: () => void;
+  onOpenCreateGroup?: () => void;
 }) {
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
@@ -238,7 +257,7 @@ export function ChatUserStrip({
     "Usuario";
 
   return (
-    <div className="relative flex w-full flex-col gap-2 border-b border-white/10 bg-[#14141c] px-3 py-2.5">
+    <div className="relative flex w-full flex-col gap-2 border-b border-[var(--talk-border)] bg-[var(--talk-strip-bg)] px-3 py-2.5">
       <div className="flex items-center gap-3">
         <Avatar
           user={
@@ -257,41 +276,57 @@ export function ChatUserStrip({
           fallbackClassName="size-9 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-xs font-bold"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium leading-tight text-zinc-100">{displayName}</p>
-          <p className="truncate text-xs text-zinc-500">{user?.status || "Disponible"}</p>
+          <p className="truncate text-sm font-medium leading-tight text-[var(--talk-text)]">{displayName}</p>
+          <p className="truncate text-xs text-[var(--talk-muted)]">{user?.status || "Disponible"}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((prev) => !prev)}
-          className="inline-flex size-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.07] text-zinc-200 transition-colors hover:border-violet-500/45 hover:bg-violet-500/15 hover:text-white"
-          aria-label="Abrir menu de usuario"
-        >
-          <Settings className="size-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <ThemeToggleButton />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--talk-border)] bg-[var(--talk-hover)] text-[var(--talk-text)] transition-colors hover:border-violet-500/45 hover:bg-violet-500/15 hover:text-violet-600 dark:hover:text-white"
+            aria-label="Abrir menu de usuario"
+          >
+            <Settings className="size-4" />
+          </button>
+        </div>
       </div>
 
       {menuOpen ? (
-        <div className="absolute bottom-14 right-3 z-20 w-48 rounded-xl border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+        <div className={cn("absolute bottom-14 right-3 z-20 w-48", TALK_MENU_PANEL)}>
           <button
             type="button"
             onClick={() => {
               onOpenContacts();
               setMenuOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+            className={TALK_MENU_ITEM}
           >
-            <Users className="size-4 text-zinc-400" />
+            <Users className={TALK_MENU_ICON} />
             Contactos
           </button>
+          {onOpenCreateGroup ? (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenCreateGroup();
+                setMenuOpen(false);
+              }}
+              className={TALK_MENU_ITEM}
+            >
+              <Users className="size-4 shrink-0 text-violet-500 dark:text-violet-400" />
+              Nuevo grupo
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
               onOpenProfile();
               setMenuOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+            className={TALK_MENU_ITEM}
           >
-            <UserPen className="size-4 text-zinc-400" />
+            <UserPen className={TALK_MENU_ICON} />
             Perfil
           </button>
           <button
@@ -300,9 +335,9 @@ export function ChatUserStrip({
               setMenuOpen(false);
               setConfirmLogoutOpen(true);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-500/10"
+            className={TALK_MENU_ITEM_DANGER}
           >
-            <LogOut className="size-4" />
+            <LogOut className="size-4 shrink-0" />
             Cerrar sesion
           </button>
         </div>
@@ -338,22 +373,22 @@ export function ContactsDirectoryPanel({
   isOnline?: (userId: string) => boolean;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#121217]">
+    <div className={TALK_SIDEBAR_PANEL}>
       <SidebarPanelHeader title="Contactos" />
-      <div className="shrink-0 border-b border-white/10 px-4 py-2">
-        <div className="mt-1 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0B0F] px-2">
-          <Search className="size-4 text-zinc-500" />
+      <div className="shrink-0 border-b border-[var(--talk-border)] px-4 py-2">
+        <div className={TALK_SEARCH_BOX}>
+          <Search className="size-4 text-[var(--talk-muted)]" />
           <input
             value={searchTerm}
             onChange={(e) => onSearchTermChange(e.target.value)}
             placeholder="Buscar en todos los usuarios"
-            className="h-9 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+            className="h-9 w-full bg-transparent text-sm text-[var(--talk-text)] outline-none placeholder:text-[var(--talk-muted)]"
           />
           {searchTerm.trim() ? (
             <button
               type="button"
               onClick={() => onSearchTermChange("")}
-              className="text-zinc-500 hover:text-zinc-200"
+              className="text-[var(--talk-muted)] hover:text-[var(--talk-text)]"
             >
               <X className="size-4" />
             </button>
@@ -366,7 +401,7 @@ export function ContactsDirectoryPanel({
             <button
               type="button"
               onClick={() => onOpenConversation(user)}
-              className="flex w-full gap-3 border-b border-white/5 px-3 py-3 text-left transition-colors hover:bg-white/[0.04] sm:px-4"
+              className="flex w-full gap-3 border-b border-[var(--talk-border)] px-3 py-3 text-left transition-colors hover:bg-[var(--talk-hover)] sm:px-4"
             >
               <div className="shrink-0" aria-hidden>
                 <Avatar
@@ -378,8 +413,8 @@ export function ContactsDirectoryPanel({
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-zinc-100">{sidebarTitle(user)}</p>
-                <p className="truncate text-xs text-zinc-500">
+                <p className="truncate font-medium text-[var(--talk-text)]">{sidebarTitle(user)}</p>
+                <p className="truncate text-xs text-[var(--talk-muted)]">
                   {isOnline?.(user.id) ? "En línea" : user.email}
                 </p>
               </div>
@@ -435,39 +470,35 @@ export function ProfileEditorPanel({
     : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#121217]">
+    <div className={TALK_SIDEBAR_PANEL}>
       <SidebarPanelHeader title="Perfil" />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-        <div className="mb-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#151520] py-4">
+        <div className={TALK_PROFILE_CARD}>
           <Avatar
             user={profileUser}
             className="size-20"
             fallbackClassName="size-20 text-xl font-bold"
           />
-          <p className="text-base font-semibold text-zinc-100">
+          <p className="text-base font-semibold text-[var(--talk-text)]">
             {profileUser ? sidebarTitle(profileUser) : "Usuario"}
           </p>
-          <p className="text-xs text-zinc-400">{profileUser?.status || "Disponible"}</p>
+          <p className="text-xs text-[var(--talk-muted)]">{profileUser?.status || "Disponible"}</p>
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Tus datos</p>
+        <p className={TALK_FIELD_LABEL}>Tus datos</p>
         <input
           value={nickname}
           onChange={(e) => onNicknameChange(e.target.value)}
           placeholder="Nickname"
-          className="h-10 rounded-md border border-white/10 bg-[#101019] px-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-violet-500/60"
+          className={TALK_INPUT}
         />
-        <select
-          value={status}
-          onChange={(e) => onStatusChange(e.target.value)}
-          className="h-10 rounded-md border border-white/10 bg-[#101019] px-2.5 text-sm text-zinc-100 outline-none focus:border-violet-500/60"
-        >
+        <select value={status} onChange={(e) => onStatusChange(e.target.value)} className={TALK_INPUT}>
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
         </select>
-        <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-white/[0.06] px-2 text-sm text-zinc-300 hover:bg-white/[0.1]">
+        <label className={TALK_BTN_FILE}>
           Seleccionar avatar
           <input
             type="file"
@@ -477,11 +508,7 @@ export function ProfileEditorPanel({
           />
         </label>
         <div className="mt-auto flex items-center justify-end gap-2 pt-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-9 rounded-md border border-white/10 px-3 text-sm text-zinc-300 transition hover:bg-white/[0.08]"
-          >
+          <button type="button" onClick={onClose} className={TALK_BTN_SECONDARY}>
             Cancelar
           </button>
           <button
@@ -505,13 +532,15 @@ export function TalkAppBrand({ onClick }: { onClick?: () => void }) {
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 border-b border-white/10 bg-[#121217] px-3 py-2.5 text-left sm:px-4",
-        onClick ? "cursor-pointer hover:bg-white/[0.03]" : "cursor-default",
+        "flex w-full items-center gap-3 border-b border-[var(--talk-border)] bg-[var(--talk-sidebar-bg)] px-3 py-2.5 text-left sm:px-4",
+        onClick ? "cursor-pointer hover:bg-[var(--talk-hover)]" : "cursor-default",
         HEADER_H
       )}
     >
       <div className="min-w-0 leading-tight">
-        <h1 className="truncate text-2xl font-bold tracking-tight text-white sm:text-[2rem]">TalkApp</h1>
+        <h1 className="truncate bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent sm:text-[2rem] dark:from-violet-300 dark:to-fuchsia-300">
+          TalkApp
+        </h1>
       </div>
     </button>
   );

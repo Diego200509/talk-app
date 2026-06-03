@@ -1,27 +1,60 @@
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
+const fs = require("fs");
 const http = require("http");
+const https = require("https");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 const { createApp } = require("./app");
 const { verifyAccessToken } = require("./utils/jwt.util");
 const { assertTokenNotRevoked } = require("./services/auth.service");
+const { createCorsOrigin } = require("./utils/cors.util");
 const { registerChatHandlers } = require("./socket/chat.handlers");
+const { getPrimaryLanIp } = require("./utils/lan-ip.util");
+const { registerCallHandlers } = require("./socket/call.handlers");
 
-const clientUrl = process.env.CLIENT_URL;
-
+const corsOrigin = createCorsOrigin();
 const app = createApp();
-const server = http.createServer(app);
+
+function createNodeServer() {
+  if (process.env.DEV_HTTPS !== "1") {
+    return { server: http.createServer(app), secure: false };
+  }
+
+  const certDir =
+    process.env.DEV_HTTPS_CERT_DIR || path.join(__dirname, "..", "front", "certificates");
+  const keyPath = path.join(certDir, "dev-key.pem");
+  const certPath = path.join(certDir, "dev-cert.pem");
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    console.error("Faltan certificados HTTPS en front/certificates.");
+    console.error("Ejecuta primero «npm run dev:https» en la carpeta front.");
+    process.exit(1);
+  }
+
+  const server = https.createServer(
+    {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    },
+    app
+  );
+  return { server, secure: true };
+}
+
+const { server, secure: isSecure } = createNodeServer();
 const io = new Server(server, {
   cors: {
-    origin: clientUrl || "*",
+    origin: corsOrigin,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 app.set("io", io);
 
 registerChatHandlers(io);
+registerCallHandlers(io);
 
 app.get("/health", (req, res) => {
   const dbOk = mongoose.connection.readyState === 1;
@@ -73,9 +106,18 @@ async function start() {
     console.error(err.code === "EADDRINUSE" ? `Puerto ${port} en uso` : err.message);
     process.exit(1);
   });
-  server.listen(port, () => {
-    console.log(`API en http://localhost:${port}`);
-    if (clientUrl) console.log("Frontend en:", clientUrl);
+  server.listen(port, "0.0.0.0", () => {
+    const lanIp = getPrimaryLanIp();
+    const scheme = isSecure ? "https" : "http";
+    console.log(`API en ${scheme}://localhost:${port}`);
+    if (lanIp) {
+      console.log(`API en red Wi-Fi: ${scheme}://${lanIp}:${port}`);
+    }
+    if (isSecure) {
+      console.log("Modo HTTPS (videollamadas / front con dev:https)");
+    }
+    const allowed = process.env.CORS_ORIGINS || process.env.CLIENT_URL;
+    if (allowed) console.log("CORS permitido:", allowed);
   });
 }
 

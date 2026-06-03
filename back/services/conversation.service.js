@@ -27,12 +27,15 @@ function visibleMessagesQuery(conversationId, viewerId) {
 function normalizeMessage(message) {
   if (!message) return null;
   const deleted = Boolean(message.deletedForEveryone);
+  const type = message.type || "text";
   return {
     id: message._id.toString(),
     conversationId: message.conversationId.toString(),
     senderId: message.sender.toString(),
-    type: message.type || "text",
+    type,
     content: deleted ? "" : message.content || "",
+    systemText: deleted ? null : message.systemText || null,
+    linkPreview: deleted ? null : message.linkPreview || null,
     imageUrl: deleted ? null : message.imageUrl || null,
     documentUrl: deleted ? null : message.documentUrl || null,
     voiceUrl: deleted ? null : message.voiceUrl || null,
@@ -164,6 +167,16 @@ async function assertConversationAccess(conversationId, userId) {
 
 async function assertMessagingAllowed(senderId, conversationId) {
   const conversation = await assertConversationAccess(conversationId, senderId);
+
+  if (conversation.type === "group") {
+    return {
+      conversation,
+      otherParticipantId: null,
+      receiverBlockedSender: false,
+      isGroup: true,
+    };
+  }
+
   const otherId = conversation.participants.find((id) => id.toString() !== senderId.toString());
   if (!otherId) {
     const err = new Error("Conversación inválida");
@@ -180,7 +193,37 @@ async function assertMessagingAllowed(senderId, conversationId) {
     conversation,
     otherParticipantId: otherId.toString(),
     receiverBlockedSender,
+    isGroup: false,
   };
+}
+
+async function createSystemMessage({ conversationId, senderId, systemText }) {
+  const text = String(systemText || "").trim();
+  if (!text) {
+    const err = new Error("Mensaje de sistema vacío");
+    err.code = "INVALID_MESSAGE";
+    throw err;
+  }
+
+  await assertConversationAccess(conversationId, senderId);
+
+  const message = await Message.create({
+    conversationId,
+    sender: senderId,
+    type: "system",
+    content: "",
+    systemText: text,
+    deliveredBy: [],
+    readBy: [],
+    blockedFor: [],
+  });
+
+  await Conversation.updateOne(
+    { _id: conversationId },
+    { $set: { lastMessageAt: message.createdAt } }
+  );
+
+  return normalizeMessage(message);
 }
 
 async function deleteMessageForEveryone(messageId, userId) {
@@ -381,6 +424,7 @@ module.exports = {
   assertConversationAccess,
   assertMessagingAllowed,
   normalizeMessage,
+  createSystemMessage,
   deleteMessageForEveryone,
   markMessageDelivered,
   markMessageAsRead,

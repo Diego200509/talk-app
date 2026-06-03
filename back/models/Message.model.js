@@ -1,6 +1,17 @@
 const mongoose = require("mongoose");
 
-const MESSAGE_TYPES = ["text", "image", "document", "voice"];
+const MESSAGE_TYPES = ["text", "image", "document", "voice", "system", "linkPreview"];
+
+const linkPreviewSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true },
+    title: { type: String, default: null },
+    description: { type: String, default: null },
+    image: { type: String, default: null },
+    domain: { type: String, default: null },
+  },
+  { _id: false }
+);
 
 const messageSchema = new mongoose.Schema(
   {
@@ -27,6 +38,8 @@ const messageSchema = new mongoose.Schema(
       maxlength: 4000,
       default: "",
     },
+    systemText: { type: String, trim: true, maxlength: 500, default: null },
+    linkPreview: { type: linkPreviewSchema, default: null },
     imageUrl: { type: String, default: null },
     documentUrl: { type: String, default: null },
     voiceUrl: { type: String, default: null },

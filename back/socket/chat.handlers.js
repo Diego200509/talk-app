@@ -146,22 +146,37 @@ function registerChatHandlers(io) {
 
     socket.on(SOCKET_EVENTS.MESSAGE_SEND, async (payload) => {
       try {
-        const { conversationId, content, type, imageUrl, documentUrl, voiceUrl, fileName, mimeType, fileSize, durationSeconds } =
-          payload || {};
-        const { message, participantIds, otherParticipantId, hiddenFromReceiver } =
-          await createMessage({
-            conversationId,
-            senderId: userId,
-            content,
-            type,
-            imageUrl,
-            documentUrl,
-            voiceUrl,
-            fileName,
-            mimeType,
-            fileSize,
-            durationSeconds,
-          });
+        const {
+          conversationId,
+          content,
+          type,
+          imageUrl,
+          documentUrl,
+          voiceUrl,
+          fileName,
+          mimeType,
+          fileSize,
+          durationSeconds,
+        } = payload || {};
+        const {
+          message,
+          participantIds,
+          otherParticipantId,
+          hiddenFromReceiver,
+          isGroup,
+        } = await createMessage({
+          conversationId,
+          senderId: userId,
+          content,
+          type,
+          imageUrl,
+          documentUrl,
+          voiceUrl,
+          fileName,
+          mimeType,
+          fileSize,
+          durationSeconds,
+        });
 
         if (hiddenFromReceiver) {
           io.to(`user:${userId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, message);
@@ -175,28 +190,74 @@ function registerChatHandlers(io) {
         }
 
         let statusMessage = message;
-        const recipientViewing = await isUserViewingConversation(
-          io,
-          conversationId,
-          otherParticipantId
-        );
 
-        if (recipientViewing) {
-          const readMsg = await markMessageAsRead(message.id, otherParticipantId);
-          if (readMsg) {
-            statusMessage = readMsg;
-            await emitStatusUpdates(io, {
-              messages: [readMsg],
-              event: SOCKET_EVENTS.MESSAGE_READ,
-            });
+        if (isGroup) {
+          const recipients = participantIds.filter((id) => id !== userId);
+          for (const recipientId of recipients) {
+            const recipientViewing = await isUserViewingConversation(
+              io,
+              conversationId,
+              recipientId
+            );
+            if (recipientViewing) {
+              const readMsg = await markMessageAsRead(message.id, recipientId);
+              if (readMsg) {
+                statusMessage = readMsg;
+                await emitStatusUpdates(io, {
+                  messages: [readMsg],
+                  event: SOCKET_EVENTS.MESSAGE_READ,
+                });
+              }
+            } else if (isUserOnline(recipientId)) {
+              const deliveredMsg = await markMessageDelivered(message.id, recipientId);
+              if (deliveredMsg) {
+                statusMessage = deliveredMsg;
+                await emitStatusUpdates(io, {
+                  messages: [deliveredMsg],
+                  event: SOCKET_EVENTS.MESSAGE_DELIVERED,
+                });
+              }
+            }
+            if (!recipientViewing) {
+              await emitUnreadUpdated(io, {
+                conversationId,
+                userId: recipientId,
+                fromUserId: userId,
+              });
+            }
           }
-        } else if (isUserOnline(otherParticipantId)) {
-          const deliveredMsg = await markMessageDelivered(message.id, otherParticipantId);
-          if (deliveredMsg) {
-            statusMessage = deliveredMsg;
-            await emitStatusUpdates(io, {
-              messages: [deliveredMsg],
-              event: SOCKET_EVENTS.MESSAGE_DELIVERED,
+        } else {
+          const recipientViewing = await isUserViewingConversation(
+            io,
+            conversationId,
+            otherParticipantId
+          );
+
+          if (recipientViewing) {
+            const readMsg = await markMessageAsRead(message.id, otherParticipantId);
+            if (readMsg) {
+              statusMessage = readMsg;
+              await emitStatusUpdates(io, {
+                messages: [readMsg],
+                event: SOCKET_EVENTS.MESSAGE_READ,
+              });
+            }
+          } else if (isUserOnline(otherParticipantId)) {
+            const deliveredMsg = await markMessageDelivered(message.id, otherParticipantId);
+            if (deliveredMsg) {
+              statusMessage = deliveredMsg;
+              await emitStatusUpdates(io, {
+                messages: [deliveredMsg],
+                event: SOCKET_EVENTS.MESSAGE_DELIVERED,
+              });
+            }
+          }
+
+          if (!recipientViewing) {
+            await emitUnreadUpdated(io, {
+              conversationId,
+              userId: otherParticipantId,
+              fromUserId: userId,
             });
           }
         }
@@ -213,14 +274,6 @@ function registerChatHandlers(io) {
           participantIds,
           fromUserId: userId,
         });
-
-        if (!recipientViewing) {
-          await emitUnreadUpdated(io, {
-            conversationId,
-            userId: otherParticipantId,
-            fromUserId: userId,
-          });
-        }
       } catch (error) {
         if (error.code === "USER_BLOCKED_SENDER" || error.code === "USER_BLOCKED") {
           socket.emit(SOCKET_EVENTS.CHAT_ERROR, {

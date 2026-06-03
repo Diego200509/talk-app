@@ -13,6 +13,7 @@ export function getMessageStatus(
 ): MessageStatus | null {
   if (!currentUserId || String(message.senderId) !== String(currentUserId)) return null;
   if (message.deletedForEveryone) return null;
+  if (message.type === "system") return null;
 
   const readBy = normIds(message.readBy);
   const deliveredBy = normIds(message.deliveredBy);
@@ -58,6 +59,12 @@ export function lastMessagePreviewText(message: ChatMessage | null | undefined):
   }
   if (type === "voice") {
     return message.fileName || message.content || "Nota de voz";
+  }
+  if (type === "system") {
+    return message.systemText || "Actividad del grupo";
+  }
+  if (type === "linkPreview") {
+    return message.linkPreview?.title || message.content || "Enlace";
   }
   return message.content || "Sin mensajes todavía";
 }

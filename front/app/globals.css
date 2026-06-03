@@ -117,6 +117,189 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+html[data-theme="dark"],
+html:not([data-theme]) {
+  --talk-app-bg: #0b0b0f;
+  --talk-panel-bg: #121217;
+  --talk-sidebar-bg: #121217;
+  --talk-header-bg: #121217;
+  --talk-chat-bg: #0c0c10;
+  --talk-footer-bg: #0f0f14;
+  --talk-strip-bg: #14141c;
+  --talk-text: #f4f4f5;
+  --talk-muted: #71717a;
+  --talk-border: rgba(255, 255, 255, 0.1);
+  --talk-input-bg: #0b0b0f;
+  --talk-input-bar-bg: #14141c;
+  --talk-hover: rgba(255, 255, 255, 0.06);
+  --talk-active-chat: rgba(109, 40, 217, 0.35);
+  --talk-bubble-mine: #6d28d9;
+  --talk-bubble-mine-text: #ffffff;
+  --talk-bubble-other: #1a1a22;
+  --talk-bubble-other-text: #f4f4f5;
+  --talk-bubble-other-border: rgba(255, 255, 255, 0.1);
+  --talk-search-bg: #0b0b0f;
+  --talk-popover-bg: #1a1a24;
+  --talk-popover-text: #f4f4f5;
+  --talk-popover-hover: rgba(255, 255, 255, 0.06);
+  --talk-popover-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --talk-profile-card-bg: #151520;
+  --talk-empty-gradient: radial-gradient(circle at top, rgba(139, 92, 246, 0.12), rgba(12, 12, 16, 0.95) 50%);
+  --talk-modal-overlay: rgba(0, 0, 0, 0.6);
+  --talk-modal-bg: #151520;
+  --talk-auth-bg: #0b0b0f;
+  --talk-auth-aside-bg: linear-gradient(to bottom right, #1e0b3a, #2d1250, #0f0520);
+  --talk-auth-tagline: #f5d0fe;
+  --talk-auth-main-bg: #0b0b0f;
+  --talk-auth-main-grid: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  --talk-auth-main-glow: radial-gradient(ellipse at top, rgba(147, 51, 234, 0.12), transparent 55%);
+  --talk-auth-card-shadow: 0 0 48px rgba(147, 51, 234, 0.18);
+}
+
+html[data-theme="light"] {
+  --talk-app-bg: #e8ecf4;
+  --talk-panel-bg: #ffffff;
+  --talk-sidebar-bg: #f5f7fb;
+  --talk-header-bg: #ffffff;
+  --talk-chat-bg: #e3e8f2;
+  --talk-footer-bg: #ffffff;
+  --talk-strip-bg: #f0f2f8;
+  --talk-text: #1e293b;
+  --talk-muted: #64748b;
+  --talk-border: rgba(15, 23, 42, 0.1);
+  --talk-input-bg: #ffffff;
+  --talk-input-bar-bg: #f8fafc;
+  --talk-hover: rgba(124, 58, 237, 0.07);
+  --talk-active-chat: rgba(124, 58, 237, 0.12);
+  --talk-bubble-mine: #7c3aed;
+  --talk-bubble-mine-text: #ffffff;
+  --talk-bubble-other: #ffffff;
+  --talk-bubble-other-text: #334155;
+  --talk-bubble-other-border: rgba(15, 23, 42, 0.08);
+  --talk-search-bg: #eef1f7;
+  --talk-popover-bg: #ffffff;
+  --talk-popover-text: #1e293b;
+  --talk-popover-hover: rgba(124, 58, 237, 0.08);
+  --talk-popover-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  --talk-profile-card-bg: #f8f9fd;
+  --talk-empty-gradient: radial-gradient(circle at top, rgba(124, 58, 237, 0.1), #e3e8f2 55%);
+  --talk-modal-overlay: rgba(15, 23, 42, 0.28);
+  --talk-modal-bg: #ffffff;
+  --talk-auth-bg: #e8ecf4;
+  --talk-auth-aside-bg: linear-gradient(to bottom right, #ddd6fe, #ede9fe, #c4b5fd);
+  --talk-auth-tagline: #5b21b6;
+  --talk-auth-main-bg: #e8ecf4;
+  --talk-auth-main-grid: linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  --talk-auth-main-glow: radial-gradient(ellipse at top, rgba(124, 58, 237, 0.08), transparent 55%);
+  --talk-auth-card-shadow: 0 12px 40px rgba(124, 58, 237, 0.12);
+}
+
+html[data-theme="light"] .talk-chat-shell {
+  color: var(--talk-text);
+}
+
+html[data-theme="light"] .talk-chat-shell [class*="border-white"] {
+  border-color: var(--talk-border) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .bg-\[\#121217\],
+html[data-theme="light"] .talk-chat-shell .bg-\[\#14141c\],
+html[data-theme="light"] .talk-chat-shell .bg-\[\#0f0f14\],
+html[data-theme="light"] .talk-chat-shell .bg-\[\#0c0c10\],
+html[data-theme="light"] .talk-chat-shell .bg-\[\#0B0B0F\],
+html[data-theme="light"] .talk-chat-shell .bg-\[\#0b0b0f\] {
+  background-color: var(--talk-panel-bg) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell aside.bg-\[\#121217\] {
+  background-color: var(--talk-sidebar-bg) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell section .bg-\[\#0c0c10\] {
+  background-color: var(--talk-chat-bg) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .text-zinc-100,
+html[data-theme="light"] .talk-chat-shell .text-zinc-50 {
+  color: var(--talk-text) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .text-zinc-500,
+html[data-theme="light"] .talk-chat-shell .text-zinc-400,
+html[data-theme="light"] .talk-chat-shell .text-zinc-600,
+html[data-theme="light"] .talk-chat-shell .text-zinc-300 {
+  color: var(--talk-muted) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .bg-violet-950\/50 {
+  background-color: var(--talk-active-chat) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .text-violet-200,
+html[data-theme="light"] .talk-chat-shell .font-medium.text-violet-200 {
+  color: #6d28d9 !important;
+}
+
+html[data-theme="light"] .talk-chat-shell .hover\:bg-white\/\[0\.04\]:hover,
+html[data-theme="light"] .talk-chat-shell .hover\:bg-white\/\[0\.06\]:hover {
+  background-color: var(--talk-hover) !important;
+}
+
+html[data-theme="light"] .talk-chat-shell input,
+html[data-theme="light"] .talk-chat-shell textarea {
+  color: var(--talk-text);
+}
+
+html[data-theme="light"] .talk-chat-shell input::placeholder,
+html[data-theme="light"] .talk-chat-shell textarea::placeholder {
+  color: #94a3b8;
+}
+
+html[data-theme="light"] .talk-chat-shell .rounded-xl.border.border-white\/10.bg-\[\#0B0B0F\] {
+  background-color: var(--talk-search-bg) !important;
+}
+
+html[data-theme="light"] {
+  scrollbar-color: rgba(124, 58, 237, 0.55) rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] *::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme="light"] *::-webkit-scrollbar-thumb {
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+html[data-theme="light"] .talk-chat-shell select {
+  color-scheme: light;
+}
+
+.talk-empty-state {
+  background: var(--talk-empty-gradient);
+}
+
+.talk-auth-aside {
+  background: var(--talk-auth-aside-bg);
+}
+
+.talk-auth-main {
+  background-color: var(--talk-auth-main-bg);
+  background-image: var(--talk-auth-main-grid);
+  background-size: 48px 48px;
+}
+
+html[data-theme="light"] .talk-auth-aside .pointer-events-none {
+  opacity: 0.2;
+}
+
+html[data-theme="dark"] .talk-chat-shell select,
+html:not([data-theme]) .talk-chat-shell select {
+  color-scheme: dark;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

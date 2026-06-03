@@ -65,13 +65,23 @@ export async function readAudioDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const audio = new Audio(url);
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 3000);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      URL.revokeObjectURL(url);
+    }
+
     audio.addEventListener("loadedmetadata", () => {
       const duration = Number.isFinite(audio.duration) ? audio.duration : null;
-      URL.revokeObjectURL(url);
+      cleanup();
       resolve(duration);
     });
     audio.addEventListener("error", () => {
-      URL.revokeObjectURL(url);
+      cleanup();
       resolve(null);
     });
   });

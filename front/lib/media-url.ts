@@ -1,12 +1,31 @@
-const apiBase =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:5001/api";
+import { getApiOrigin } from "@/lib/api-origin";
 
-export const API_ORIGIN = apiBase.replace(/\/api$/, "");
+function rewriteBackendMediaUrl(url: URL): string | null {
+  if (!url.pathname.startsWith("/uploads/")) return null;
+  const isLocalBackend =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(url.hostname);
+  if (!isLocalBackend) return null;
+  return `${getApiOrigin()}${url.pathname}`;
+}
 
 export function resolveMediaUrl(path?: string | null): string {
   if (!path) return "";
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  return `${API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+  if (path.startsWith("blob:") || path.startsWith("data:")) return path;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    try {
+      const rewritten = rewriteBackendMediaUrl(new URL(path));
+      if (rewritten) return rewritten;
+    } catch {
+      /* usar URL original */
+    }
+    return path;
+  }
+  const origin = getApiOrigin();
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export function formatFileSize(bytes?: number | null): string {

@@ -89,9 +89,10 @@ export function useConversations({
     async (file: File, durationSeconds?: number | null) => {
       try {
         validateAudioFile(file);
-        const duration =
-          durationSeconds ?? (await readAudioDuration(file));
         const uploaded = await uploadVoice(file);
+        const duration =
+          durationSeconds ??
+          (await readAudioDuration(file).catch(() => null));
         emitMessage({
           type: "voice",
           content: file.name || uploaded.fileName || "Audio",

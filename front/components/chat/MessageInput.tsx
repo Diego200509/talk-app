@@ -5,6 +5,7 @@ import { FileText, ImageIcon, Mic, Music2, Plus, Send, Square } from "lucide-rea
 import { formatDuration } from "@/lib/media-url";
 import { normalizeMimeType } from "@/lib/media-validation";
 import { cn } from "@/lib/utils";
+import { TALK_MENU_ITEM, TALK_MENU_PANEL } from "@/components/chat/chat-shell.helpers";
 
 type Props = {
   disabled: boolean;
@@ -206,8 +207,8 @@ export function MessageInput({
   }, []);
 
   return (
-    <div className="flex min-h-[52px] w-full flex-1 items-end gap-2 bg-[#14141c] p-2 md:min-h-[56px] md:p-2.5">
-      <div className="flex min-h-[44px] w-full flex-1 items-end gap-2 rounded-2xl border border-white/10 bg-[#0B0B0F] px-2 py-1.5 ring-violet-500/20 focus-within:border-violet-500/40 focus-within:ring-1 md:px-3">
+    <div className="flex min-h-[52px] w-full flex-1 items-end gap-2 bg-[var(--talk-input-bar-bg)] p-2 md:min-h-[56px] md:p-2.5">
+      <div className="flex min-h-[44px] w-full flex-1 items-end gap-2 rounded-2xl border border-[var(--talk-border)] bg-[var(--talk-input-bg)] px-2 py-1.5 ring-violet-500/20 focus-within:border-violet-500/40 focus-within:ring-1 md:px-3">
         {/* Menú adjuntos (+) */}
         <div className="relative mb-0.5 shrink-0" data-attach-menu-root>
           <button
@@ -227,13 +228,13 @@ export function MessageInput({
           </button>
 
           {attachOpen ? (
-            <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/10 bg-[#1a1a24] p-1 shadow-xl">
+            <div className={cn("absolute bottom-full left-0 z-30 mb-2 w-44", TALK_MENU_PANEL)}>
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+                className={TALK_MENU_ITEM}
               >
-                <span className="inline-flex size-8 items-center justify-center rounded-full bg-violet-500/20 text-violet-300">
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
                   <ImageIcon className="size-4" />
                 </span>
                 Foto
@@ -241,9 +242,9 @@ export function MessageInput({
               <button
                 type="button"
                 onClick={() => documentInputRef.current?.click()}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+                className={TALK_MENU_ITEM}
               >
-                <span className="inline-flex size-8 items-center justify-center rounded-full bg-sky-500/20 text-sky-300">
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300">
                   <FileText className="size-4" />
                 </span>
                 Documento
@@ -251,9 +252,9 @@ export function MessageInput({
               <button
                 type="button"
                 onClick={() => audioInputRef.current?.click()}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-100 transition hover:bg-white/[0.06]"
+                className={TALK_MENU_ITEM}
               >
-                <span className="inline-flex size-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300">
                   <Music2 className="size-4" />
                 </span>
                 Audio
@@ -313,7 +314,7 @@ export function MessageInput({
                   : "Escribe un mensaje…"
             }
             disabled={disabled || uploading}
-            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
+            className="max-h-32 min-h-[36px] w-full resize-none bg-transparent py-2 text-sm text-[var(--talk-text)] outline-none placeholder:text-[var(--talk-muted)] disabled:opacity-50"
             aria-label="Mensaje"
           />
         )}

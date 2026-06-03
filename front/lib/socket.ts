@@ -1,15 +1,22 @@
 import { io, type Socket } from "socket.io-client";
+import { getApiOrigin } from "@/lib/api-origin";
 
 let socketInstance: Socket | null = null;
-
-function socketUrl() {
-  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:5001";
-}
+let socketOrigin: string | null = null;
 
 export function getSocket(token: string) {
+  const origin = getApiOrigin();
+
+  if (socketInstance && socketOrigin !== origin) {
+    socketInstance.disconnect();
+    socketInstance.removeAllListeners();
+    socketInstance = null;
+  }
+
   if (!socketInstance) {
-    socketInstance = io(socketUrl(), {
-      transports: ["websocket"],
+    socketOrigin = origin;
+    socketInstance = io(origin, {
+      transports: ["websocket", "polling"],
       autoConnect: false,
     });
   }
@@ -25,5 +32,8 @@ export function getSocket(token: string) {
 export function disconnectSocket() {
   if (socketInstance) {
     socketInstance.disconnect();
+    socketInstance.removeAllListeners();
+    socketInstance = null;
+    socketOrigin = null;
   }
 }

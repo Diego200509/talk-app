@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Download, FileText, MoreVertical, Pause, Play, Trash2, X } from "lucide-react";
+import { LinkPreviewCard } from "@/components/chat/LinkPreviewCard";
 import { MessageStatusChecks } from "@/components/chat/chat-shell.parts";
 import { formatDuration, formatFileSize, resolveMediaUrl } from "@/lib/media-url";
 import { cn } from "@/lib/utils";
+import { TALK_MENU_ITEM_DANGER, TALK_MENU_PANEL } from "@/components/chat/chat-shell.helpers";
 import type { ChatMessage } from "@/types/chat";
 
 function ImageLightbox({
@@ -164,6 +166,20 @@ function MessageBody({
     );
   }
 
+  if (type === "linkPreview" || (type === "text" && message.linkPreview)) {
+    const preview = message.linkPreview!;
+    return (
+      <>
+        {message.content ? (
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {message.content}
+          </p>
+        ) : null}
+        <LinkPreviewCard preview={preview} mine={mine} />
+      </>
+    );
+  }
+
   if (type === "image" && message.imageUrl) {
     const src = resolveMediaUrl(message.imageUrl);
     return (
@@ -251,18 +267,33 @@ export function Message({
   mine,
   currentUserId,
   otherUserId,
+  senderName,
+  isGroup,
   onDeleteForEveryone,
 }: {
   message: ChatMessage;
   mine: boolean;
   currentUserId: string | undefined;
   otherUserId?: string;
+  senderName?: string;
+  isGroup?: boolean;
   onDeleteForEveryone?: (messageId: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const deleted = Boolean(message.deletedForEveryone);
   const type = message.type || "text";
-  const isMedia = type !== "text";
+
+  if (type === "system" && message.systemText) {
+    return (
+      <div className="flex w-full justify-center px-2 py-1">
+        <p className="max-w-md rounded-full bg-[var(--talk-hover)] px-3 py-1.5 text-center text-[11px] leading-snug text-[var(--talk-muted)]">
+          {message.systemText}
+        </p>
+      </div>
+    );
+  }
+
+  const isMedia = type !== "text" && type !== "linkPreview";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -282,16 +313,19 @@ export function Message({
         "group relative max-w-[88%]",
         mine ? "self-end" : "self-start",
         menuOpen && "z-50",
-        isMedia && "max-w-[min(88%,420px)]"
+        (isMedia || type === "linkPreview") && "max-w-[min(88%,420px)]"
       )}
     >
+      {!mine && isGroup && senderName ? (
+        <p className="mb-0.5 px-1 text-[11px] font-medium text-violet-600 dark:text-violet-300/90">{senderName}</p>
+      ) : null}
       <div
         className={cn(
           "relative overflow-hidden rounded-2xl text-sm leading-relaxed shadow-sm",
           isMedia ? "px-2.5 py-2" : "px-3.5 py-2",
           mine
-            ? "rounded-tr-md border border-violet-400/40 bg-violet-700 text-white"
-            : "rounded-tl-md border border-white/10 bg-[#1a1a22] text-zinc-100",
+            ? "rounded-tr-md border border-violet-400/40 bg-[var(--talk-bubble-mine)] text-[var(--talk-bubble-mine-text)]"
+            : "rounded-tl-md border border-[var(--talk-bubble-other-border)] bg-[var(--talk-bubble-other)] text-[var(--talk-bubble-other-text)]",
           deleted && "italic opacity-80"
         )}
       >
@@ -337,10 +371,7 @@ export function Message({
             <MoreVertical className="size-4" />
           </button>
           {menuOpen ? (
-            <div
-              role="menu"
-              className="absolute left-0 top-full z-[100] mt-2 w-48 rounded-xl border border-white/15 bg-[#1c1c28] p-1.5 shadow-2xl ring-1 ring-black/40"
-            >
+            <div role="menu" className={cn("absolute left-0 top-full z-[100] mt-2 w-48", TALK_MENU_PANEL)}>
               <button
                 type="button"
                 role="menuitem"
@@ -348,7 +379,7 @@ export function Message({
                   setMenuOpen(false);
                   onDeleteForEveryone(message.id);
                 }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-500/15"
+                className={TALK_MENU_ITEM_DANGER}
               >
                 <Trash2 className="size-4 shrink-0" />
                 Eliminar para todos

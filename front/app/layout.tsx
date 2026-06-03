@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { TALKAPP_LOGO_PATH } from "@/lib/brand";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 import "./globals.css";
 
 const fontSans = Plus_Jakarta_Sans({
@@ -36,8 +37,18 @@ export default function RootLayout({
     <html
       lang="es"
       className={`${fontSans.variable} ${fontMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("talkapp-theme");var th=t==="light"?"light":"dark";document.documentElement.setAttribute("data-theme",th);document.documentElement.classList.toggle("dark",th==="dark");}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className="flex min-h-full flex-col bg-[var(--talk-app-bg)] font-sans text-[var(--talk-text)]">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

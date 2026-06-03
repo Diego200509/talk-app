@@ -1,4 +1,8 @@
 import { ChevronLeft } from "lucide-react";
+import {
+  TALK_PANEL_HEADER,
+  TALK_PANEL_TITLE,
+} from "@/components/chat/chat-shell.helpers";
 
 type Props = {
   title: string;
@@ -8,19 +12,19 @@ type Props = {
 
 export function SidebarPanelHeader({ title, onBack, backLabel = "Volver" }: Props) {
   return (
-    <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+    <div className={TALK_PANEL_HEADER}>
       {onBack ? (
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-zinc-300 transition hover:bg-white/[0.1] hover:text-zinc-100"
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-[var(--talk-border)] bg-[var(--talk-hover)] px-2 text-xs text-[var(--talk-text)] transition hover:bg-violet-500/10"
           aria-label={backLabel}
         >
           <ChevronLeft className="size-3.5" />
           <span>{backLabel}</span>
         </button>
       ) : null}
-      <p className="text-sm font-semibold text-zinc-100">{title}</p>
+      <p className={TALK_PANEL_TITLE}>{title}</p>
     </div>
   );
 }

@@ -87,6 +87,7 @@ export function useChatSocket(handlers: Params) {
     const onUserUnblocked = (payload: { userId?: string }) => {
       if (payload?.userId) handlersRef.current.onUserUnblocked?.({ userId: payload.userId });
     };
+    const onGroupEvent = () => handlersRef.current.onContactsRefresh?.();
 
     socket.on(SOCKET_EVENTS.MESSAGE_NEW, onMessage);
     socket.on(SOCKET_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
@@ -104,6 +105,13 @@ export function useChatSocket(handlers: Params) {
     socket.on(SOCKET_EVENTS.CONVERSATION_UNMUTED, onConversationUnmuted);
     socket.on(SOCKET_EVENTS.USER_BLOCKED, onUserBlocked);
     socket.on(SOCKET_EVENTS.USER_UNBLOCKED, onUserUnblocked);
+    socket.on(SOCKET_EVENTS.GROUP_CREATED, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_UPDATED, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_MEMBER_ADDED, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_MEMBER_REMOVED, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_LEFT, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_ADMIN_ADDED, onGroupEvent);
+    socket.on(SOCKET_EVENTS.GROUP_ADMIN_REMOVED, onGroupEvent);
 
     return () => {
       socket.off(SOCKET_EVENTS.MESSAGE_NEW, onMessage);
@@ -122,6 +130,13 @@ export function useChatSocket(handlers: Params) {
       socket.off(SOCKET_EVENTS.CONVERSATION_UNMUTED, onConversationUnmuted);
       socket.off(SOCKET_EVENTS.USER_BLOCKED, onUserBlocked);
       socket.off(SOCKET_EVENTS.USER_UNBLOCKED, onUserUnblocked);
+      socket.off(SOCKET_EVENTS.GROUP_CREATED, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_UPDATED, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_MEMBER_ADDED, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_MEMBER_REMOVED, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_LEFT, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_ADMIN_ADDED, onGroupEvent);
+      socket.off(SOCKET_EVENTS.GROUP_ADMIN_REMOVED, onGroupEvent);
     };
   }, [handlers.token]);
 }

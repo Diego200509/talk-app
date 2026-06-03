@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
+    "dev:https": "node scripts/dev-https.cjs",
     "start": "node server.js"
   },
   "keywords": [],
